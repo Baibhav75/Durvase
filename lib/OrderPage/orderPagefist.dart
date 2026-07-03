@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../service/Auth_servcie.dart';
 import '../model/getcategory_model.dart';
-import 'sub_categories_page.dart';
+import 'product_screen.dart';
 
 class OrderPageFst extends StatefulWidget {
   const OrderPageFst({super.key});
@@ -265,7 +265,10 @@ class _OrderPageFstState extends State<OrderPageFst> {
                           Navigator.push(
                             context,
                             MaterialPageRoute(
-                              builder: (context) => SubCategoriesPage(category: cat),
+                              builder: (context) => ProductScreen(
+                                categoryId: cat.catId,
+                                categoryName: cat.categoryName,
+                              ),
                             ),
                           );
                         },

@@ -113,7 +113,7 @@ class _SubCategoriesPageState extends State<SubCategoriesPage> {
                       context,
                       MaterialPageRoute(
                         builder: (context) => ProductScreen(
-                          categoryId: subCat.subCatId,
+                          categoryId: subCat.catId,
                           categoryName: subCat.subCategoryName,
                         ),
                       ),

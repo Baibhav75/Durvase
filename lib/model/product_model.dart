@@ -81,3 +81,88 @@ class Product {
     );
   }
 }
+
+class ProductDetailsResponse {
+  final bool status;
+  final String message;
+  final ProductDetailsData? data;
+
+  ProductDetailsResponse({
+    required this.status,
+    required this.message,
+    this.data,
+  });
+
+  factory ProductDetailsResponse.fromJson(Map<String, dynamic> json) {
+    return ProductDetailsResponse(
+      status: json["status"] ?? false,
+      message: json["message"] ?? "",
+      data: json["data"] != null ? ProductDetailsData.fromJson(json["data"]) : null,
+    );
+  }
+}
+
+class ProductDetailsData {
+  final int id;
+  final String productId;
+  final String productName;
+  final String catId;
+  final String subCatId;
+  final String categoryName;
+  final String subCategoryName;
+  final String image1;
+  final String? image2;
+  final String? image3;
+  final String? image4;
+  final String? image5;
+  final String mrp;
+  final String sellingPrice;
+  final String unit;
+  final String? description;
+  final bool isInCart;
+  final int qty;
+
+  ProductDetailsData({
+    required this.id,
+    required this.productId,
+    required this.productName,
+    required this.catId,
+    required this.subCatId,
+    required this.categoryName,
+    required this.subCategoryName,
+    required this.image1,
+    this.image2,
+    this.image3,
+    this.image4,
+    this.image5,
+    required this.mrp,
+    required this.sellingPrice,
+    required this.unit,
+    this.description,
+    required this.isInCart,
+    required this.qty,
+  });
+
+  factory ProductDetailsData.fromJson(Map<String, dynamic> json) {
+    return ProductDetailsData(
+      id: json["ID"] ?? 0,
+      productId: json["ProductId"] ?? "",
+      productName: json["ProductName"] ?? "",
+      catId: json["CatId"] ?? "",
+      subCatId: json["SubCatId"] ?? "",
+      categoryName: json["CategoryName"] ?? "",
+      subCategoryName: json["SubCategoryName"] ?? "",
+      image1: json["Image1"] ?? "",
+      image2: json["Image2"],
+      image3: json["Image3"],
+      image4: json["Image4"],
+      image5: json["Image5"],
+      mrp: json["MRP"] ?? "",
+      sellingPrice: json["SellingPrice"] ?? "",
+      unit: json["Unit"] ?? "",
+      description: json["Description"],
+      isInCart: json["IsInCart"] ?? false,
+      qty: json["Qty"] ?? 0,
+    );
+  }
+}
