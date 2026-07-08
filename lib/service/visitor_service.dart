@@ -4,7 +4,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class VisitorService {
-  static const String baseUrl = 'https://durvasaayurved.online/api';
+  static const String baseUrl = 'https://durvasaayurved.com/api';
   static const int timeoutSeconds = 30;
 
   // Method to submit visitor data

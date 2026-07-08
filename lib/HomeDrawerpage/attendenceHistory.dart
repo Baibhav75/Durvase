@@ -1,6 +1,14 @@
 import 'package:flutter/material.dart';
+import '../model/TodoModel.dart';
+import '../service/api_serviceProfile.dart';
+import '../service/attendance_service.dart';
+import '../model/attendance_history_response.dart';
 
 class AttendanceHistoryPage extends StatefulWidget {
+  final TodoModel? userData;
+
+  const AttendanceHistoryPage({Key? key, this.userData}) : super(key: key);
+
   @override
   _AttendancePageState createState() => _AttendancePageState();
 }
@@ -10,82 +18,61 @@ class _AttendancePageState extends State<AttendanceHistoryPage> {
   DateTime _selectedDate = DateTime.now();
   List<Map<String, dynamic>> _attendanceData = [];
 
-  final List<Map<String, dynamic>> _monthlySummary = [
-    {
-      'month': 'November 2024',
-      'present': 22,
-      'absent': 3,
-      'late': 2,
-      'leave': 3,
-    },
-    {
-      'month': 'October 2024',
-      'present': 20,
-      'absent': 5,
-      'late': 1,
-      'leave': 4,
-    },
-    {
-      'month': 'September 2024',
-      'present': 23,
-      'absent': 2,
-      'late': 0,
-      'leave': 5,
-    },
-  ];
+  List<Map<String, dynamic>> _monthlySummary = [];
 
-  final List<Map<String, dynamic>> _recentAttendance = [
-    {
-      'date': '2024-11-28',
-      'day': 'Thursday',
-      'check_in': '08:45 AM',
-      'check_out': '05:30 PM',
-      'status': 'Present',
-      'statusColor': Colors.green,
-      'working_hours': '8h 45m',
-      'location': 'Office Main Gate',
-    },
-    {
-      'date': '2024-11-27',
-      'day': 'Wednesday',
-      'check_in': '09:15 AM',
-      'check_out': '05:25 PM',
-      'status': 'Late',
-      'statusColor': Colors.orange,
-      'working_hours': '8h 10m',
-      'location': 'Office Main Gate',
-    },
-    {
-      'date': '2024-11-26',
-      'day': 'Tuesday',
-      'check_in': '08:30 AM',
-      'check_out': '05:45 PM',
-      'status': 'Present',
-      'statusColor': Colors.green,
-      'working_hours': '9h 15m',
-      'location': 'Office Main Gate',
-    },
-    {
-      'date': '2024-11-25',
-      'day': 'Monday',
-      'check_in': '--:--',
-      'check_out': '--:--',
-      'status': 'Absent',
-      'statusColor': Colors.red,
-      'working_hours': '0h 0m',
-      'location': '--',
-    },
-    {
-      'date': '2024-11-22',
-      'day': 'Friday',
-      'check_in': '08:50 AM',
-      'check_out': '05:20 PM',
-      'status': 'Present',
-      'statusColor': Colors.green,
-      'working_hours': '8h 30m',
-      'location': 'Office Main Gate',
-    },
-  ];
+  int _presentCount = 0;
+  int _absentCount = 0;
+  int _lateCount = 0;
+  int _leaveCount = 0;
+
+  void _calculateSummaries() {
+    _presentCount = 0;
+    _absentCount = 0;
+    _lateCount = 0;
+    _leaveCount = 0;
+    
+    Map<String, Map<String, int>> monthlyGroups = {};
+
+    for (var item in _attendanceData) {
+      String status = item['status'];
+      if (status == 'Present') _presentCount++;
+      else if (status == 'Absent') _absentCount++;
+      else if (status == 'Late') _lateCount++;
+      else if (status == 'Leave') _leaveCount++;
+      
+      String dateStr = item['date'];
+      if(dateStr != '--') {
+        try {
+          DateTime dt = DateTime.parse(dateStr);
+          const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+          String monthYear = "${months[dt.month - 1]} ${dt.year}";
+          
+          if(!monthlyGroups.containsKey(monthYear)) {
+             monthlyGroups[monthYear] = { 'present': 0, 'absent': 0, 'late': 0, 'leave': 0 };
+          }
+          
+          if (status == 'Present') monthlyGroups[monthYear]!['present'] = (monthlyGroups[monthYear]!['present'] ?? 0) + 1;
+          else if (status == 'Absent') monthlyGroups[monthYear]!['absent'] = (monthlyGroups[monthYear]!['absent'] ?? 0) + 1;
+          else if (status == 'Late') monthlyGroups[monthYear]!['late'] = (monthlyGroups[monthYear]!['late'] ?? 0) + 1;
+          else if (status == 'Leave') monthlyGroups[monthYear]!['leave'] = (monthlyGroups[monthYear]!['leave'] ?? 0) + 1;
+        } catch (e) {
+          // ignore
+        }
+      }
+    }
+    
+    _monthlySummary = monthlyGroups.entries.map((e) {
+      return {
+        'month': e.key,
+        'present': e.value['present'],
+        'absent': e.value['absent'],
+        'late': e.value['late'],
+        'leave': e.value['leave'],
+      };
+    }).toList();
+  }
+
+  bool _isLoading = false;
 
   @override
   void initState() {
@@ -93,10 +80,102 @@ class _AttendancePageState extends State<AttendanceHistoryPage> {
     _loadAttendanceData();
   }
 
-  void _loadAttendanceData() {
+  Future<void> _loadAttendanceData() async {
     setState(() {
-      _attendanceData = _recentAttendance;
+      _isLoading = true;
     });
+
+    try {
+      String empId = widget.userData?.empId ?? "";
+      if (widget.userData?.mobile != null) {
+        final profileData = await ApiService.fetchProfile(widget.userData!.mobile!);
+        if (profileData != null && profileData.data1 != null && profileData.data1!.isNotEmpty) {
+          empId = profileData.data1!.first.empId ?? empId;
+        }
+      }
+
+      if (empId.isNotEmpty) {
+        final response = await AttendanceService.getAttendanceHistory(empId);
+        if (response['success'] == true) {
+          final historyResponse = AttendanceHistoryResponse.fromJson(response['data']);
+          if (historyResponse.data != null) {
+             List<Map<String, dynamic>> formattedData = [];
+             for (var item in historyResponse.data!) {
+               DateTime? checkInDate;
+               if (item.checkInTime != null) {
+                 checkInDate = DateTime.tryParse(item.checkInTime!);
+               }
+               
+               String formattedDate = '--';
+               String formattedDay = '--';
+               String checkInStr = '--:--';
+               if (checkInDate != null) {
+                 formattedDate = "${checkInDate.year}-${checkInDate.month.toString().padLeft(2, '0')}-${checkInDate.day.toString().padLeft(2, '0')}";
+                 const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+                 formattedDay = days[checkInDate.weekday - 1];
+                 
+                 int hour = checkInDate.hour % 12;
+                 if (hour == 0) hour = 12;
+                 String period = checkInDate.hour >= 12 ? 'PM' : 'AM';
+                 checkInStr = "${hour.toString().padLeft(2, '0')}:${checkInDate.minute.toString().padLeft(2, '0')} $period";
+               }
+
+               String checkOutStr = '--:--';
+               if (item.checkOutTime != null) {
+                 DateTime? checkOutDate = DateTime.tryParse(item.checkOutTime!);
+                 if (checkOutDate != null) {
+                   int hour = checkOutDate.hour % 12;
+                   if (hour == 0) hour = 12;
+                   String period = checkOutDate.hour >= 12 ? 'PM' : 'AM';
+                   checkOutStr = "${hour.toString().padLeft(2, '0')}:${checkOutDate.minute.toString().padLeft(2, '0')} $period";
+                 }
+               }
+
+               Color statusColor = Colors.orange;
+               if (item.status == 'Present') statusColor = Colors.green;
+               else if (item.status == 'Absent') statusColor = Colors.red;
+
+               formattedData.add({
+                 'date': formattedDate,
+                 'day': formattedDay,
+                 'check_in': checkInStr,
+                 'check_out': checkOutStr,
+                 'status': item.status ?? 'Pending',
+                 'statusColor': statusColor,
+                 'working_hours': item.workHours ?? '--',
+                 'location': item.checkInLocation ?? '--',
+               });
+             }
+             
+             setState(() {
+               _attendanceData = formattedData;
+               _calculateSummaries();
+             });
+          }
+        } else {
+          setState(() {
+            _attendanceData = [];
+            _calculateSummaries();
+          });
+        }
+      } else {
+        // Fallback to recent data if no empId
+        setState(() {
+          _attendanceData = [];
+          _calculateSummaries();
+        });
+      }
+    } catch (e) {
+      print('Error loading attendance data: $e');
+      setState(() {
+        _attendanceData = [];
+        _calculateSummaries();
+      });
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
   @override
@@ -147,20 +226,20 @@ class _AttendancePageState extends State<AttendanceHistoryPage> {
                   children: [
                     _buildSummaryItem(
                       'Present',
-                      '22',
+                      '$_presentCount',
                       Icons.check_circle,
                       Colors.green,
                     ),
-                    _buildSummaryItem('Absent', '3', Icons.cancel, Colors.red),
+                    _buildSummaryItem('Absent', '$_absentCount', Icons.cancel, Colors.red),
                     _buildSummaryItem(
                       'Late',
-                      '2',
+                      '$_lateCount',
                       Icons.watch_later,
                       Colors.orange,
                     ),
                     _buildSummaryItem(
                       'Leave',
-                      '3',
+                      '$_leaveCount',
                       Icons.beach_access,
                       Colors.purple,
                     ),
@@ -183,7 +262,7 @@ class _AttendancePageState extends State<AttendanceHistoryPage> {
           ),
 
           // Tab Content
-          Expanded(child: _buildTabContent()),
+          Expanded(child: _isLoading ? const Center(child: CircularProgressIndicator()) : _buildTabContent()),
         ],
       ),
 
@@ -274,6 +353,9 @@ class _AttendancePageState extends State<AttendanceHistoryPage> {
   }
 
   Widget _buildDailyLog() {
+    if (_attendanceData.isEmpty) {
+      return Center(child: Text('No attendance history found.'));
+    }
     return ListView.builder(
       padding: EdgeInsets.all(16),
       itemCount: _attendanceData.length,
@@ -403,6 +485,9 @@ class _AttendancePageState extends State<AttendanceHistoryPage> {
   }
 
   Widget _buildMonthlyReport() {
+    if (_monthlySummary.isEmpty) {
+      return Center(child: Text('No monthly report available.'));
+    }
     return ListView.builder(
       padding: EdgeInsets.all(16),
       itemCount: _monthlySummary.length,
@@ -418,7 +503,7 @@ class _AttendancePageState extends State<AttendanceHistoryPage> {
             summary['absent'] +
             summary['late'] +
             summary['leave'];
-    double presentPercentage = (summary['present'] / totalDays) * 100;
+    double presentPercentage = totalDays > 0 ? (summary['present'] / totalDays) * 100 : 0;
 
     return Card(
       elevation: 2,

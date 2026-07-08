@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import '../model/mr_model.dart';
 
 class WorkAreaDebugHelper {
-  static const String baseUrl = 'https://durvasaayurved.online/API/';
+  static const String baseUrl = 'https://durvasaayurved.com/API/';
 
   // Test API directly with detailed logging
   static Future<Map<String, dynamic>> testWorkAreaAPI(String employeeId) async {

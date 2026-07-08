@@ -185,6 +185,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     final employeeData = _profileData!.data1!.first;
+    
+    // Print UserId and Employee Id as requested
+    print("UserId: ${employeeData.userId}");
+    print("Employee Id: ${employeeData.empId}");
+    
     final isCached = ApiService.isProfileCached(widget.userData.mobile!);
     DateTime? lastUpdated;
     if (isCached) {
@@ -242,9 +247,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _buildProfileItem("Country", employeeData.country),
 
             _buildSectionHeader("Employment Information"),
-            _buildProfileItem("Employee ID", employeeData.employeeId),
-            _buildProfileItem("Employee Code", employeeData.employeeCode),
-            _buildProfileItem("Emp ID", employeeData.empId),
+            _buildProfileItem("Employee ID", employeeData.empId),
             _buildProfileItem("Employee Type", employeeData.employeeType),
             _buildProfileItem("Status", employeeData.status),
             _buildProfileItem("User ID", employeeData.userId),

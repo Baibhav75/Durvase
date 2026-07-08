@@ -14,8 +14,9 @@ import 'viewHome/widgets/home_drawer.dart';
 
 class EmployeeHomePage extends StatefulWidget {
   final TodoModel userData;
+  final String userId;
 
-  const EmployeeHomePage({super.key, required this.userData});
+  const EmployeeHomePage({super.key, required this.userData, required this.userId });
 
   @override
   State<EmployeeHomePage> createState() => _EmployeeHomePageState();
@@ -84,7 +85,7 @@ class _EmployeeHomePageState extends State<EmployeeHomePage> {
           case "Order":
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) =>  OrderPageFst()),
+              MaterialPageRoute(builder: (context) =>  OrderPageFst(userId: widget.userId)),
             );
             break;
           case "Payment In":

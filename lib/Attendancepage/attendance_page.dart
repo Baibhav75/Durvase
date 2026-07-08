@@ -9,6 +9,9 @@ import 'attendanceOutPage.dart';
 import '../widgets/location_display_widget.dart';
 import '../model/TodoModel.dart';
 import '../service/attendance_manager.dart';
+import '../service/attendance_service.dart';
+import '../service/geocoding_service.dart';
+import '../service/api_serviceProfile.dart';
 
 class AttendancePage extends StatefulWidget {
   final TodoModel userData;
@@ -216,14 +219,56 @@ class _AttendancePageState extends State<AttendancePage> {
           _capturedImage = File(image.path);
         });
 
-        // Check in using AttendanceManager
+        // Ensure we have the latest location
+        await _getCurrentLocation();
+        
+        final checkInTime = DateTime.now();
+
+        // Get actual location address
+        String currentLocationName = "Location unavailable";
+        if (_latitude != null && _longitude != null) {
+          currentLocationName = await GeocodingService.getAddressFromCoordinates(
+            _latitude!,
+            _longitude!,
+          );
+        }
+
+        String currentEmpId = widget.userData.empId ?? "UNKNOWN";
+        if (widget.userData.mobile != null) {
+          try {
+            final profileData = await ApiService.fetchProfile(widget.userData.mobile!);
+            if (profileData != null && profileData.data1 != null && profileData.data1!.isNotEmpty) {
+              currentEmpId = profileData.data1!.first.empId ?? currentEmpId;
+            }
+          } catch (e) {
+            print('Could not fetch profile for empId: $e');
+          }
+        }
+
+        // Check in using AttendanceManager (local)
         _attendanceManager.checkIn(
-          checkInTime: DateTime.now(),
+          checkInTime: checkInTime,
           latitude: _latitude ?? 0.0,
           longitude: _longitude ?? 0.0,
           checkInImage: _capturedImage!,
-          locationName: "Capital Icon",
+          locationName: currentLocationName,
         );
+
+        // Submit check-in to API immediately
+        try {
+          // You might want to show a loading indicator here in a full production app
+          await AttendanceService.submitCheckIn(
+            employeeId: currentEmpId,
+            employeeName: widget.userData.name ?? "Unknown",
+            checkInTime: checkInTime,
+            latitude: _latitude ?? 0.0,
+            longitude: _longitude ?? 0.0,
+            locationName: currentLocationName,
+            capturedImage: _capturedImage,
+          );
+        } catch (e) {
+          print('Check-in API submission failed: $e');
+        }
 
         // Start new session
         _startNewSession();

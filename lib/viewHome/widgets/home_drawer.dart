@@ -309,7 +309,7 @@ class _HomeDrawerState extends State<HomeDrawer> {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => AttendanceHistoryPage(),
+                  builder: (context) => AttendanceHistoryPage(userData: widget.userData),
                 ),
               );
             }),

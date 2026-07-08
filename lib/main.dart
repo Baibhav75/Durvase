@@ -106,7 +106,10 @@ class _SplashScreenState extends State<SplashScreen> {
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(
-                builder: (context) => EmployeeHomePage(userData: userData!),
+                builder: (context) => EmployeeHomePage(
+                  userData: userData!,
+                  userId: userData.empId?.toString() ?? '',
+                ),
               ),
             );
           }

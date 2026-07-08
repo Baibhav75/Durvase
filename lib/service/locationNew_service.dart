@@ -27,7 +27,7 @@ class LocationNewService extends StatefulWidget {
 
 class _LocationNewServiceState extends State<LocationNewService> {
   // API Base URL - Using the correct API endpoint from your project
-  static const String BASE_URL = "https://durvasaayurved.online/API";
+  static const String BASE_URL = "https://durvasaayurved.com/API";
 
   // Selected values
   String? selectedState;

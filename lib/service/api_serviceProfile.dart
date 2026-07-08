@@ -1,10 +1,10 @@
-// api_service.dart
+
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../model/TodoModel1.dart';
 
 class ApiService {
-  static const String baseUrl = 'https://durvasaayurved.online/API/';
+  static const String baseUrl = 'https://durvasaayurved.com/API/';
   static const int timeoutSeconds = 15; // Reduced timeout for better UX
   static const int cacheExpiryMinutes =
   2; // Reduced cache time for fresher data

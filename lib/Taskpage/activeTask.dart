@@ -1,6 +1,13 @@
-import 'package:flutter/material.dart';
+ import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import '../service/visit_history_service.dart';
+import '../model/visit_history_model.dart';
 
 class TaskScreen extends StatefulWidget {
+  final dynamic employeeData;
+
+  const TaskScreen({Key? key, this.employeeData}) : super(key: key);
+
   @override
   _TaskScreenState createState() => _TaskScreenState();
 }
@@ -9,15 +16,107 @@ class _TaskScreenState extends State<TaskScreen> {
   int _selectedTab = 0;
   final List<String> _tabs = ['Today', 'Tomorrow', 'Future', 'Expire'];
 
+  bool isLoading = true;
+  String errorMessage = '';
+  List<Visitors> _allRevisits = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRevisitTasks();
+  }
+
+  Future<void> _loadRevisitTasks() async {
+    setState(() {
+      isLoading = true;
+      errorMessage = '';
+    });
+
+    try {
+      // Use passed mobile if available, otherwise fallback
+      String empMobile = widget.employeeData?.mobile ?? '8024272651';
+      final model = await VisitHistoryService.getVisitorList(empMobile);
+
+      if (model != null && model.visitors != null) {
+        setState(() {
+          _allRevisits = model.visitors!
+              .where((visit) => visit.reVisited?.toLowerCase() == 'yes')
+              .toList();
+          isLoading = false;
+        });
+      } else {
+        setState(() {
+          isLoading = false;
+          errorMessage = 'No data found';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        isLoading = false;
+        errorMessage = 'Failed to load tasks.';
+      });
+    }
+  }
+
+  DateTime? _parseDate(String? dateString) {
+    if (dateString == null || dateString.isEmpty) return null;
+    try {
+      if (dateString.contains('-')) {
+        return DateFormat('yyyy-MM-dd').parse(dateString);
+      } else if (dateString.contains('/')) {
+        return DateFormat('dd/MM/yyyy').parse(dateString);
+      } else {
+        return DateTime.tryParse(dateString);
+      }
+    } catch (e) {
+      return null;
+    }
+  }
+
+  bool _isSameDay(DateTime? date1, DateTime? date2) {
+    if (date1 == null || date2 == null) return false;
+    return date1.year == date2.year &&
+        date1.month == date2.month &&
+        date1.day == date2.day;
+  }
+
+  List<Visitors> _getFilteredTasks() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final tomorrow = today.add(const Duration(days: 1));
+
+    return _allRevisits.where((visit) {
+      final visitDate = _parseDate(visit.visitDate);
+      if (visitDate == null) return false; // Exclude if no valid date
+      final vDate = DateTime(visitDate.year, visitDate.month, visitDate.day);
+
+      switch (_selectedTab) {
+        case 0: // Today
+          return _isSameDay(vDate, today);
+        case 1: // Tomorrow
+          return _isSameDay(vDate, tomorrow);
+        case 2: // Future
+          return vDate.isAfter(tomorrow);
+        case 3: // Expire
+          return vDate.isBefore(today);
+        default:
+          return false;
+      }
+    }).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final filteredTasks = _getFilteredTasks();
+
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
         backgroundColor: Colors.deepPurple,
         elevation: 0,
-        title: Text(
-          'All Active Task',
+        foregroundColor: Colors.white,
+        title: const Text(
+          'Re-visit Tasks',
           style: TextStyle(
             color: Colors.white,
             fontSize: 20,
@@ -79,32 +178,46 @@ class _TaskScreenState extends State<TaskScreen> {
           Expanded(
             child: Container(
               color: Colors.grey.shade50,
-              child: Column(
-                children: [
-                  // Showing Today Tasks Text
-                  Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.all(16),
-                    child: Text(
-                      'Showing Today Tasks',
-                      style: TextStyle(
-                        color: Colors.grey.shade600,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ),
+              child: isLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : errorMessage.isNotEmpty
+                      ? Center(child: Text(errorMessage))
+                      : Column(
+                          children: [
+                            // Showing Tasks Text
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(16),
+                              child: Text(
+                                'Showing ${_tabs[_selectedTab]} Tasks (${filteredTasks.length})',
+                                style: TextStyle(
+                                  color: Colors.grey.shade600,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
 
-                  // Task List
-                  Expanded(
-                    child: ListView.builder(
-                      itemCount: 5, // Replace with your actual task count
-                      itemBuilder: (context, index) {
-                        return TaskItem(taskNumber: index + 1);
-                      },
-                    ),
-                  ),
-                ],
-              ),
+                            // Task List
+                            Expanded(
+                              child: filteredTasks.isEmpty
+                                  ? const Center(
+                                      child: Text(
+                                        "No tasks found for this category.",
+                                        style: TextStyle(color: Colors.grey),
+                                      ),
+                                    )
+                                  : ListView.builder(
+                                      itemCount: filteredTasks.length,
+                                      itemBuilder: (context, index) {
+                                        return TaskItem(
+                                          taskNumber: index + 1,
+                                          visitor: filteredTasks[index],
+                                        );
+                                      },
+                                    ),
+                            ),
+                          ],
+                        ),
             ),
           ),
         ],
@@ -115,18 +228,46 @@ class _TaskScreenState extends State<TaskScreen> {
 
 class TaskItem extends StatelessWidget {
   final int taskNumber;
+  final Visitors visitor;
 
-  const TaskItem({Key? key, required this.taskNumber}) : super(key: key);
+  const TaskItem({
+    Key? key,
+    required this.taskNumber,
+    required this.visitor,
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    String name = visitor.businessName?.isNotEmpty == true
+        ? visitor.businessName!
+        : (visitor.personName ?? 'Unknown');
+    String desc = visitor.purpose ?? 'No specific purpose';
+    
+    String formattedDate = visitor.visitDate ?? '';
+    try {
+      if (formattedDate.isNotEmpty) {
+        // Simple parsing format for UI
+        DateTime? dt;
+        if (formattedDate.contains('-')) {
+          dt = DateFormat('yyyy-MM-dd').parse(formattedDate);
+        } else if (formattedDate.contains('/')) {
+          dt = DateFormat('dd/MM/yyyy').parse(formattedDate);
+        } else {
+          dt = DateTime.tryParse(formattedDate);
+        }
+        if (dt != null) {
+          formattedDate = DateFormat('dd MMM yyyy').format(dt);
+        }
+      }
+    } catch (_) {}
+
     return Container(
-      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      padding: EdgeInsets.all(16),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(12),
-        boxShadow: [
+        boxShadow: const [
           BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2)),
         ],
       ),
@@ -143,7 +284,7 @@ class TaskItem extends StatelessWidget {
             child: Center(
               child: Text(
                 taskNumber.toString(),
-                style: TextStyle(
+                style: const TextStyle(
                   color: Colors.blue,
                   fontWeight: FontWeight.bold,
                 ),
@@ -151,7 +292,7 @@ class TaskItem extends StatelessWidget {
             ),
           ),
 
-          SizedBox(width: 16),
+          const SizedBox(width: 16),
 
           // Task Details
           Expanded(
@@ -159,21 +300,25 @@ class TaskItem extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Task Title $taskNumber',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  name,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                SizedBox(height: 4),
+                const SizedBox(height: 4),
                 Text(
-                  'Task description goes here...',
+                  desc,
                   style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                SizedBox(height: 8),
+                const SizedBox(height: 8),
                 Row(
                   children: [
-                    Icon(Icons.access_time, size: 16, color: Colors.grey),
-                    SizedBox(width: 4),
+                    const Icon(Icons.calendar_today, size: 14, color: Colors.grey),
+                    const SizedBox(width: 4),
                     Text(
-                      '2:00 PM',
+                      formattedDate,
                       style: TextStyle(
                         color: Colors.grey.shade600,
                         fontSize: 12,
@@ -193,7 +338,7 @@ class TaskItem extends StatelessWidget {
               border: Border.all(color: Colors.grey.shade400),
               borderRadius: BorderRadius.circular(4),
             ),
-            child: Icon(Icons.check, size: 16, color: Colors.transparent),
+            child: const Icon(Icons.check, size: 16, color: Colors.transparent),
           ),
         ],
       ),

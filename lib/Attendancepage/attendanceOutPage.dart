@@ -11,6 +11,7 @@ import '../widgets/location_display_widget.dart';
 import '../service/geocoding_service.dart';
 import '../service/attendance_manager.dart';
 import '../model/TodoModel.dart'; // Add this import
+import '../service/api_serviceProfile.dart';
 
 class AttendanceOutPage extends StatefulWidget {
   final File? capturedImage; // This is the check-in image
@@ -176,6 +177,24 @@ class _AttendanceOutPageState extends State<AttendanceOutPage> {
       setState(() {
         _currentLatitude = position.latitude;
         _currentLongitude = position.longitude;
+      });
+
+      // Get address for the current location to send to API
+      try {
+        final address = await GeocodingService.getAddressFromCoordinates(
+          position.latitude,
+          position.longitude,
+        );
+        if (mounted) {
+          setState(() {
+            _currentLocationName = address;
+          });
+        }
+      } catch (e) {
+        print("Error getting address: $e");
+      }
+
+      setState(() {
         _isGettingLocation = false;
       });
 
@@ -185,6 +204,7 @@ class _AttendanceOutPageState extends State<AttendanceOutPage> {
       print('📍 Checkout Location Captured:');
       print('   Latitude: $_currentLatitude');
       print('   Longitude: $_currentLongitude');
+      print('   Address: $_currentLocationName');
     } catch (e) {
       setState(() {
         _isGettingLocation = false;
@@ -248,7 +268,9 @@ class _AttendanceOutPageState extends State<AttendanceOutPage> {
     showDialog(
       context: context,
       builder: (context) {
-        return AlertDialog(
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
           title: Text(
             "Check Out?",
             style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
@@ -302,7 +324,15 @@ class _AttendanceOutPageState extends State<AttendanceOutPage> {
               // Checkout image capture
               if (_checkOutImage == null) ...[
                 ElevatedButton(
-                  onPressed: _captureCheckOutImage,
+                  onPressed: () async {
+                    await _captureCheckOutImage();
+                    if (_checkOutImage != null && _currentLatitude != null) {
+                        Navigator.pop(context); // Close dialog
+                        _submitAttendanceToAPI(DateTime.now()); // Auto-submit!
+                    } else {
+                        setStateDialog(() {}); // Update the dialog state
+                    }
+                  },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.deepPurple,
                   ),
@@ -357,6 +387,7 @@ class _AttendanceOutPageState extends State<AttendanceOutPage> {
             ),
           ],
         );
+        }); // Close StatefulBuilder
       },
     );
   }
@@ -369,7 +400,18 @@ class _AttendanceOutPageState extends State<AttendanceOutPage> {
 
     try {
       // Use actual employee data from widget.userData
-      final String employeeId = widget.userData.empId ?? "UNKNOWN";
+      String employeeId = widget.userData.empId ?? "UNKNOWN";
+      if (widget.userData.mobile != null) {
+        try {
+          final profileData = await ApiService.fetchProfile(widget.userData.mobile!);
+          if (profileData != null && profileData.data1 != null && profileData.data1!.isNotEmpty) {
+            employeeId = profileData.data1!.first.empId ?? employeeId;
+          }
+        } catch (e) {
+          print('Could not fetch profile for empId: $e');
+        }
+      }
+      
       final String employeeName = widget.userData.name ?? "Unknown Employee";
       final String employeeMobile = widget.userData.mobile ?? "Unknown";
 
@@ -430,6 +472,7 @@ class _AttendanceOutPageState extends State<AttendanceOutPage> {
         checkOutImage: _checkOutImage, // Send check-out image
         checkInCityName: _checkInCityName, // Send check-in city name
         checkOutCityName: _checkOutCityName, // Send check-out city name
+        checkOutLocationName: _currentLocationName, // Send check-out address
       );
 
       setState(() {
@@ -450,145 +493,18 @@ class _AttendanceOutPageState extends State<AttendanceOutPage> {
     }
   }
 
-  // Success dialog
+  // Success dialog (Smooth redirect)
   void _showSuccessDialog(DateTime checkOutTime, String message) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) {
-        return Dialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          elevation: 10,
-          child: Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.check_circle, color: Colors.green, size: 60),
-                const SizedBox(height: 16),
-                Text(
-                  "Check-Out Successful!",
-                  style: GoogleFonts.poppins(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  message,
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    color: Colors.grey[600],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  "You worked for ${_formatDuration(_workDuration)}",
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.poppins(
-                    fontSize: 14,
-                    color: Colors.green[700],
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                // Additional details
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.green[50],
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Column(
-                    children: [
-                      _buildDetailRow("Employee ID", "EMP001"),
-                      _buildDetailRow("Location", widget.locationName),
-                      _buildDetailRow(
-                        "Check-in Time",
-                        _formatTime(_checkInTime),
-                      ),
-                      _buildDetailRow(
-                        "Check-out Time",
-                        _formatTime(checkOutTime),
-                      ),
-                      // Show check-in city name
-                      if (_checkInCityName != null)
-                        _buildDetailRow("Check-in Location", _checkInCityName!)
-                      else if (_isGettingCheckInCity)
-                        _buildDetailRow(
-                          "Check-in Location",
-                          "Getting location...",
-                        )
-                      else if (widget.checkInLatitude != null &&
-                            widget.checkInLongitude != null)
-                          _buildDetailRow(
-                            "Check-in Location",
-                            "${widget.checkInLatitude!.toStringAsFixed(4)}, ${widget.checkInLongitude!.toStringAsFixed(4)}",
-                          )
-                        else
-                          _buildDetailRow("Check-in Location", "Not available"),
-                      // Show check-out city name
-                      if (_checkOutCityName != null)
-                        _buildDetailRow(
-                          "Check-out Location",
-                          _checkOutCityName!,
-                        )
-                      else if (_isGettingCheckOutCity)
-                        _buildDetailRow(
-                          "Check-out Location",
-                          "Getting location...",
-                        )
-                      else if (_currentLatitude != null &&
-                            _currentLongitude != null)
-                          _buildDetailRow(
-                            "Check-out Location",
-                            "${_currentLatitude!.toStringAsFixed(4)}, ${_currentLongitude!.toStringAsFixed(4)}",
-                          )
-                        else
-                          _buildDetailRow("Check-out Location", "Not available"),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-                ElevatedButton(
-                  onPressed: () {
-                    widget.onCheckOut?.call(checkOutTime);
-                    // Reset the checked-in status
-                    _resetCheckedInStatus();
-                    Navigator.popUntil(context, (route) => route.isFirst);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.deepPurple,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 30,
-                      vertical: 12,
-                    ),
-                  ),
-                  child: Text(
-                    "OK",
-                    style: GoogleFonts.poppins(
-                      fontSize: 15,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text("Check-Out Successful! You worked for ${_formatDuration(_workDuration)}"),
+        backgroundColor: Colors.green,
+        duration: const Duration(seconds: 3),
+      ),
     );
+    widget.onCheckOut?.call(checkOutTime);
+    _resetCheckedInStatus();
+    Navigator.popUntil(context, (route) => route.isFirst);
   }
 
   // Reset the checked-in status using AttendanceManager

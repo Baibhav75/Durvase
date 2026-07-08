@@ -4,7 +4,8 @@ import '../model/getcategory_model.dart';
 import 'product_screen.dart';
 
 class OrderPageFst extends StatefulWidget {
-  const OrderPageFst({super.key});
+  final String userId;
+  const OrderPageFst({super.key , required this.userId});
 
   @override
   _OrderPageFstState createState() => _OrderPageFstState();
@@ -268,6 +269,7 @@ class _OrderPageFstState extends State<OrderPageFst> {
                               builder: (context) => ProductScreen(
                                 categoryId: cat.catId,
                                 categoryName: cat.categoryName,
+                                  userId: widget.userId
                               ),
                             ),
                           );
@@ -293,7 +295,7 @@ class _OrderPageFstState extends State<OrderPageFst> {
                                 borderRadius: BorderRadius.circular(18),
                                 child: cat.image.isNotEmpty
                                     ? Image.network(
-                                        'https://durvasaayurved.online${cat.image}',
+                                        'https://durvasaayurved.com${cat.image}',
                                         fit: BoxFit.cover,
                                         errorBuilder: (context, error, stackTrace) => Icon(
                                           Icons.category,

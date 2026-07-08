@@ -6,8 +6,9 @@ import 'product_screen.dart';
 
 class SubCategoriesPage extends StatefulWidget {
   final Category category;
+  final String userId;
 
-  const SubCategoriesPage({super.key, required this.category});
+  const SubCategoriesPage({super.key, required this.category,  required this.userId,});
 
   @override
   State<SubCategoriesPage> createState() => _SubCategoriesPageState();
@@ -115,6 +116,7 @@ class _SubCategoriesPageState extends State<SubCategoriesPage> {
                         builder: (context) => ProductScreen(
                           categoryId: subCat.catId,
                           categoryName: subCat.subCategoryName,
+                            userId: widget.userId
                         ),
                       ),
                     );
