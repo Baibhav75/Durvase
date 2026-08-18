@@ -1,20 +1,21 @@
 import 'dart:convert';
+
 import 'package:http/http.dart' as http;
+
 import '/service/Api_constants.dart';
 import '../model/country_model.dart';
 
 class CountryService {
+  /// Fetch all countries from API
   Future<List<CountryModel>> getAllCountries() async {
     try {
-      final uri = Uri.parse(
-        ApiConstants.getAllCountry,
-      );
+      final uri = Uri.parse(ApiConstants.getAllCountry);
 
       print('🌍 Country API URL: $uri');
 
       final response = await http.get(
         uri,
-        headers: {
+        headers: const {
           'Content-Type': 'application/json',
           'Accept': 'application/json',
         },
@@ -23,37 +24,59 @@ class CountryService {
       print('🌍 Country API Status: ${response.statusCode}');
       print('🌍 Country API Response: ${response.body}');
 
-      if (response.statusCode == 200) {
-        final sanitizedBody = _sanitizeJson(response.body);
-        final dynamic decoded = jsonDecode(sanitizedBody);
-
-        if (decoded is Map<String, dynamic>) {
-          final countryResponse = CountryResponse.fromMap(decoded);
-
-          if (countryResponse.header != null &&
-              countryResponse.header!.success == false) {
-            throw Exception(
-              countryResponse.header!.message ?? 'Failed to fetch countries',
-            );
-          }
-
-          return countryResponse.data;
-        } else if (decoded is List) {
-          return decoded
-              .whereType<Map>()
-              .map(
-                (item) => CountryModel.fromMap(
-                  Map<String, dynamic>.from(item),
-                ),
-              )
-              .toList();
-        }
-
-        return [];
+      // Check HTTP status
+      if (response.statusCode != 200) {
+        throw Exception(
+          'Server Error: ${response.statusCode}',
+        );
       }
 
+      // Sanitize response before decoding
+      final sanitizedBody = _sanitizeJson(response.body);
+
+      if (sanitizedBody.isEmpty) {
+        throw Exception('Empty response received from server');
+      }
+
+      final dynamic decoded = jsonDecode(sanitizedBody);
+
+      // API response is an object
+      if (decoded is Map<String, dynamic>) {
+        final countryResponse = CountryResponse.fromMap(decoded);
+
+        // Check API-level success
+        if (countryResponse.header != null &&
+            countryResponse.header!.success == false) {
+          throw Exception(
+            countryResponse.header!.message ??
+                'Failed to fetch countries',
+          );
+        }
+
+        return countryResponse.data;
+      }
+
+      // API response is directly a list
+      if (decoded is List) {
+        return decoded
+            .whereType<Map>()
+            .map(
+              (item) => CountryModel.fromMap(
+            Map<String, dynamic>.from(item),
+          ),
+        )
+            .toList();
+      }
+
+      // Unexpected response format
       throw Exception(
-        'Server Error: ${response.statusCode}',
+        'Invalid country API response format',
+      );
+    } on FormatException catch (e) {
+      print('❌ Country JSON Error: $e');
+
+      throw Exception(
+        'Invalid JSON response received from country API',
       );
     } catch (e) {
       print('❌ Country API Error: $e');
@@ -64,22 +87,31 @@ class CountryService {
     }
   }
 
-  /// Sanitizes invalid JSON returned by backend (e.g. `"CountryId": ,` or trailing commas)
+  /// Sanitizes invalid JSON returned by backend.
+  ///
+  /// Handles cases such as:
+  /// "CountryId": ,
+  /// "CountryName": ,
+  /// and trailing commas before } or ].
   String _sanitizeJson(String rawJson) {
     String sanitized = rawJson.trim();
 
-    // 1. Replace empty value patterns like `"CountryId": ,` or `"key": }` with null
+    // 1. Replace empty JSON values with null.
+    //
+    // Example:
+    // "CountryId": ,
+    // becomes:
+    // "CountryId": null
     sanitized = sanitized.replaceAllMapped(
       RegExp(r':\s*(?=[,\}\]])'),
-      (match) => ': null',
+          (match) => ': null',
     );
 
-    // 2. Remove trailing commas before closing braces/brackets like `, }` or `, ]`
     sanitized = sanitized.replaceAllMapped(
       RegExp(r',\s*([}\]])'),
-      (match) => match.group(1) ?? '',
+          (match) => match.group(1) ?? '',
     );
 
     return sanitized;
   }
-}
+}

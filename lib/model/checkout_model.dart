@@ -1,3 +1,16 @@
+double _toDouble(dynamic val) {
+  if (val == null) return 0.0;
+  if (val is num) return val.toDouble();
+  return double.tryParse(val.toString()) ?? 0.0;
+}
+
+int _toInt(dynamic val) {
+  if (val == null) return 0;
+  if (val is int) return val;
+  if (val is num) return val.toInt();
+  return int.tryParse(val.toString()) ?? 0;
+}
+
 class CheckoutResponse {
   final bool status;
   final String message;
@@ -16,26 +29,30 @@ class CheckoutResponse {
   });
 
   factory CheckoutResponse.fromJson(Map<String, dynamic> json) {
-    final customer = json["Customer"] ?? {};
-    final shipping = json["ShippingAddress"] ?? {};
-    final wallet = json["Wallet"] ?? {};
+    final customer = json["Customer"] is Map ? json["Customer"] : {};
+    final shipping = json["ShippingAddress"] is Map ? json["ShippingAddress"] : {};
+    final wallet = json["Wallet"] is Map ? json["Wallet"] : {};
 
     return CheckoutResponse(
-      status: json["Status"] ?? false,
-      message: json["Message"] ?? "",
+      status: json["Status"] == true || json["status"] == true,
+      message: json["Message"]?.toString() ?? json["message"]?.toString() ?? "",
       user: CheckoutUser(
-        fullName: customer["Name"]?.toString() ?? "",
+        fullName: customer["Name"]?.toString() ?? customer["FullName"]?.toString() ?? "",
         mobile: customer["Mobile"]?.toString() ?? "",
         email: customer["Email"]?.toString() ?? "",
-        permanentAddress: shipping["Address"]?.toString() ?? "",
-        city: shipping["District"]?.toString() ?? "",
+        permanentAddress: shipping["Address"]?.toString() ?? shipping["PermanentAddress"]?.toString() ?? "",
+        city: shipping["District"]?.toString() ?? shipping["City"]?.toString() ?? "",
         state: shipping["State"]?.toString() ?? "",
       ),
-      cart: (json["CartItems"] as List<dynamic>? ?? [])
-          .map((e) => CartItem.fromJson(e))
+      cart: (json["CartItems"] is List
+              ? (json["CartItems"] as List)
+              : (json["Cart"] is List ? (json["Cart"] as List) : []))
+          .map((e) => CartItem.fromJson(e is Map<String, dynamic> ? e : Map<String, dynamic>.from(e)))
           .toList(),
-      summary: Summary.fromJson(json["OrderSummary"] ?? {}),
-      isEligibleToUsePoint: wallet["Eligible"] ?? false,
+      summary: Summary.fromJson(json["OrderSummary"] is Map
+          ? (json["OrderSummary"] as Map<String, dynamic>)
+          : (json["Summary"] is Map ? Map<String, dynamic>.from(json["Summary"]) : {})),
+      isEligibleToUsePoint: wallet["Eligible"] == true || wallet["eligible"] == true,
     );
   }
 }
@@ -59,12 +76,12 @@ class CheckoutUser {
 
   factory CheckoutUser.fromJson(Map<String, dynamic> json) {
     return CheckoutUser(
-      fullName: json["FullName"] ?? "",
-      mobile: json["Mobile"] ?? "",
-      email: json["Email"] ?? "",
-      permanentAddress: json["PermanentAddress"] ?? "",
-      city: json["City"] ?? "",
-      state: json["State"] ?? "",
+      fullName: json["FullName"]?.toString() ?? json["Name"]?.toString() ?? "",
+      mobile: json["Mobile"]?.toString() ?? "",
+      email: json["Email"]?.toString() ?? "",
+      permanentAddress: json["PermanentAddress"]?.toString() ?? json["Address"]?.toString() ?? "",
+      city: json["City"]?.toString() ?? json["District"]?.toString() ?? "",
+      state: json["State"]?.toString() ?? "",
     );
   }
 }
@@ -98,13 +115,13 @@ class CartItem {
 
   factory CartItem.fromJson(Map<String, dynamic> json) {
     return CartItem(
-      id: json["Id"] ?? 0,
-      productID: json["ProductID"]?.toString() ?? "",
+      id: _toInt(json["Id"] ?? json["ID"]),
+      productID: json["ProductID"]?.toString() ?? json["ProductId"]?.toString() ?? "",
       productName: json["ProductName"]?.toString() ?? "",
-      uniqueID: json["UniqueID"]?.toString() ?? "",
-      listedPrice: (json["ListedPrice"] ?? 0).toDouble(),
-      sellingPrice: (json["SellingPrice"] ?? 0).toDouble(),
-      qty: json["Qty"] ?? 0,
+      uniqueID: json["UniqueID"]?.toString() ?? json["UniqueId"]?.toString() ?? "",
+      listedPrice: _toDouble(json["ListedPrice"] ?? json["MRP"] ?? json["SellingPrice"]),
+      sellingPrice: _toDouble(json["SellingPrice"] ?? json["Price"]),
+      qty: _toInt(json["Qty"] ?? json["QTY"] ?? json["Quantity"] ?? 1),
       image: json["Image"]?.toString() ?? "",
       gst: json["GST"]?.toString(),
       productPoint: json["ProductPoint"]?.toString() ?? "",
@@ -127,11 +144,16 @@ class Summary {
   });
 
   factory Summary.fromJson(Map<String, dynamic> json) {
+    final double listed = _toDouble(json["ListedTotal"] ?? json["TotalListedPrice"] ?? json["MRP"]);
+    final double selling = _toDouble(json["SellingTotal"] ?? json["TotalSellingPrice"] ?? json["FinalAmount"]);
+    final double disc = _toDouble(json["Discount"] ?? (listed > selling ? listed - selling : 0.0));
+    final double finalAmt = _toDouble(json["FinalAmount"] ?? json["TotalAmount"] ?? selling);
+
     return Summary(
-      totalListedPrice: (json["ListedTotal"] ?? 0).toDouble(),
-      totalSellingPrice: (json["SellingTotal"] ?? 0).toDouble(),
-      discount: (json["Discount"] ?? 0).toDouble(),
-      finalAmount: (json["FinalAmount"] ?? 0).toDouble(),
+      totalListedPrice: listed,
+      totalSellingPrice: selling,
+      discount: disc,
+      finalAmount: finalAmt,
     );
   }
 }

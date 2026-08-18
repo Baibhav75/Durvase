@@ -94,19 +94,31 @@ class AuthService {
     throw Exception("Failed to load product details");
   }
   Future<CheckoutResponse?> getCheckout(String userId) async {
-    final response = await http.get(
-      Uri.parse(
-        "$baseUrl/CheckOut/Checkout?UserID=$userId",
-      ),
-    );
+    try {
+      String resolvedUserId = userId.trim();
+      if (resolvedUserId.isEmpty) {
+        resolvedUserId = (await SessionManager.getUserId()) ?? '';
+      }
 
-    if (response.statusCode == 200) {
-      final jsonData = jsonDecode(response.body);
+      if (resolvedUserId.isEmpty) {
+        debugPrint("GetCheckout: UserId is empty");
+        return null;
+      }
 
-      return CheckoutResponse.fromJson(jsonData);
+      final url = Uri.parse("$baseUrl/CheckOut/Checkout?UserID=$resolvedUserId");
+      debugPrint("GetCheckout URL: $url");
+      final response = await http.get(url);
+      debugPrint("GetCheckout StatusCode: ${response.statusCode}");
+
+      if (response.statusCode == 200) {
+        final jsonData = jsonDecode(response.body);
+        return CheckoutResponse.fromJson(jsonData);
+      }
+      return null;
+    } catch (e, stack) {
+      debugPrint("GetCheckout Exception: $e\n$stack");
+      return null;
     }
-
-    throw Exception("Failed to load checkout");
   }
 
   Future<OrderSummaryResponse?> getOrderSummary(String userId) async {

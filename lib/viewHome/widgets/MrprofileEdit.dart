@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 
+import 'package:get/get.dart';
+import '../../constants/app_colors.dart';
+import '../../controller/app_security_controller.dart';
 import '../../model/TodoModel1.dart';
 import '../../service/edit_employee_profile_service.dart';
 
@@ -22,6 +25,7 @@ class MrProfileEditSheet extends StatefulWidget {
 
 class _MrProfileEditSheetState extends State<MrProfileEditSheet> {
   final ImagePicker _picker = ImagePicker();
+  final AppSecurityController _securityController = Get.put(AppSecurityController());
 
   late TextEditingController _nameController;
   late TextEditingController _mobileController;
@@ -507,7 +511,10 @@ class _MrProfileEditSheetState extends State<MrProfileEditSheet> {
                           setState(() => _obscurePassword = !_obscurePassword),
                     ),
                   ),
-                  const SizedBox(height: 20),
+
+                  const SizedBox(height: 16),
+                  _buildSecuritySection(),
+                  const SizedBox(height: 24),
 
                   // Save Button
                   SizedBox(
@@ -548,6 +555,150 @@ class _MrProfileEditSheetState extends State<MrProfileEditSheet> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildSecuritySection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionTitle('App Security & Unlock', Icons.security_rounded),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.grey[50],
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.grey[300]!),
+          ),
+          child: Obx(() {
+            final isFpEnabled = _securityController.isFingerprintEnabled.value;
+            final fpDate = _securityController.fingerprintEnabledDate.value;
+            final isBiometricSupported = _securityController.isBiometricSupported.value;
+
+            final isPwdEnabled = _securityController.isAppPasswordEnabled.value;
+            final pwdDate = _securityController.appPasswordEnabledDate.value;
+
+            return Column(
+              children: [
+                // 1. Fingerprint Login Tile
+                SwitchListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  secondary: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: isFpEnabled
+                          ? AppColors.primaryGreen.withOpacity(0.1)
+                          : Colors.grey.shade200,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.fingerprint_rounded,
+                      color: isFpEnabled ? AppColors.primaryGreen : Colors.grey.shade600,
+                      size: 24,
+                    ),
+                  ),
+                  title: Text(
+                    'Fingerprint Login',
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textDark,
+                    ),
+                  ),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 2),
+                      Text(
+                        'Use fingerprint to unlock the app quickly.',
+                        style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey.shade600),
+                      ),
+                      const SizedBox(height: 4),
+                      if (!isBiometricSupported)
+                        Text(
+                          'Fingerprint authentication is not available on this device.',
+                          style: GoogleFonts.poppins(
+                            fontSize: 11,
+                            color: Colors.orange.shade800,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        )
+                      else
+                        Text(
+                          isFpEnabled
+                              ? (fpDate.isNotEmpty ? 'Enabled on: $fpDate' : 'Enabled')
+                              : 'Disabled',
+                          style: GoogleFonts.poppins(
+                            fontSize: 11,
+                            color: isFpEnabled ? AppColors.secondaryGreen : Colors.grey.shade500,
+                            fontWeight: isFpEnabled ? FontWeight.w600 : FontWeight.normal,
+                          ),
+                        ),
+                    ],
+                  ),
+                  value: isFpEnabled,
+                  activeThumbColor: AppColors.white,
+                  activeTrackColor: AppColors.primaryGreen,
+                  onChanged: (val) => _securityController.toggleFingerprint(val, context: context),
+                ),
+
+                Divider(height: 1, color: Colors.grey[200]),
+
+                // 2. App Password Tile (Testing Mode: 1234)
+                SwitchListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  secondary: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: isPwdEnabled
+                          ? AppColors.primaryGreen.withOpacity(0.1)
+                          : Colors.grey.shade200,
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.lock_outline_rounded,
+                      color: isPwdEnabled ? AppColors.primaryGreen : Colors.grey.shade600,
+                      size: 22,
+                    ),
+                  ),
+                  title: Text(
+                    'App Password',
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textDark,
+                    ),
+                  ),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 2),
+                      Text(
+                        'Use a password to unlock the app (Test: 1234)',
+                        style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey.shade600),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        isPwdEnabled
+                            ? (pwdDate.isNotEmpty ? 'Enabled on: $pwdDate' : 'Enabled')
+                            : 'Disabled',
+                        style: GoogleFonts.poppins(
+                          fontSize: 11,
+                          color: isPwdEnabled ? AppColors.secondaryGreen : Colors.grey.shade500,
+                          fontWeight: isPwdEnabled ? FontWeight.w600 : FontWeight.normal,
+                        ),
+                      ),
+                    ],
+                  ),
+                  value: isPwdEnabled,
+                  activeThumbColor: AppColors.white,
+                  activeTrackColor: AppColors.primaryGreen,
+                  onChanged: (val) => _securityController.toggleAppPassword(val, context: context),
+                ),
+              ],
+            );
+          }),
+        ),
+      ],
     );
   }
 

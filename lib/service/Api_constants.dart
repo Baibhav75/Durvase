@@ -1,26 +1,28 @@
-class ApiConstants {
-  static const String baseUrl =
-      "https://durvasaayurved.online";
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
-  static const String getBannerImage =
+class ApiConstants {
+  static String get baseUrl =>
+      dotenv.env['API_BASE_URL'] ?? '';
+
+  static String get getBannerImage =>
       "$baseUrl/api/GetBannerImage/GetBannerImage";
 
-  static const String latestProducts =
+  static String get latestProducts =>
       "$baseUrl/api/LattestProductDetails/LatestProducts";
 
   // Country List
-  static const String getAllCountry =
+  static String get getAllCountry =>
       "$baseUrl/api/GetAllCountry";
 
   // State List (by CountryId)
-  static const String getAllState =
+  static String get getAllState =>
       "$baseUrl/api/GetAllState";
 
   // District List (by StateId)
-  static const String getAllDistrict =
+  static String get getAllDistrict =>
       "$baseUrl/api/GetAllDistrict";
 
   // Block List (by DistrictId)
-  static const String getAllBlock =
+  static String get getAllBlock =>
       "$baseUrl/api/GetAllBlock";
 }

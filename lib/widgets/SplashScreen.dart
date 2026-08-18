@@ -4,6 +4,8 @@ import '../constants/app_colors.dart';
 import '../AsmAdministister/asmHomePage.dart';
 import '../employeehomePage.dart';
 import '../homepage.dart';
+import '../service/app_security_service.dart';
+import 'app_unlock_screen.dart';
 import '/model/TodoModel.dart';
 import '/service/session_manager.dart';
 
@@ -137,24 +139,43 @@ class _SplashScreenState extends State<SplashScreen>
         final bool isAsm = userData.employeeType?.toLowerCase().contains('asm') == true ||
             userData.employeeType?.toLowerCase().contains('ams') == true;
 
-        Navigator.pushReplacement(
-          context,
-          PageRouteBuilder(
-            transitionDuration: const Duration(milliseconds: 700),
-            pageBuilder: (context, animation, secondaryAnimation) => isAsm
-                ? AsmhomepageHomePage(
-                    userData: userData!,
-                    userId: userData.empId?.toString() ?? '',
-                  )
-                : EmployeeHomePage(
-                    userData: userData!,
-                    userId: userData.empId?.toString() ?? '',
-                  ),
-            transitionsBuilder: (context, animation, secondaryAnimation, child) {
-              return FadeTransition(opacity: animation, child: child);
-            },
-          ),
-        );
+        final bool securityEnabled = await AppSecurityService.isSecurityEnabled();
+
+        if (securityEnabled) {
+          Navigator.pushReplacement(
+            context,
+            PageRouteBuilder(
+              transitionDuration: const Duration(milliseconds: 700),
+              pageBuilder: (context, animation, secondaryAnimation) => AppUnlockScreen(
+                userData: userData!,
+                userId: userData.empId?.toString() ?? '',
+                isAsm: isAsm,
+              ),
+              transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                return FadeTransition(opacity: animation, child: child);
+              },
+            ),
+          );
+        } else {
+          Navigator.pushReplacement(
+            context,
+            PageRouteBuilder(
+              transitionDuration: const Duration(milliseconds: 700),
+              pageBuilder: (context, animation, secondaryAnimation) => isAsm
+                  ? AsmhomepageHomePage(
+                      userData: userData!,
+                      userId: userData.empId?.toString() ?? '',
+                    )
+                  : EmployeeHomePage(
+                      userData: userData!,
+                      userId: userData.empId?.toString() ?? '',
+                    ),
+              transitionsBuilder: (context, animation, secondaryAnimation, child) {
+                return FadeTransition(opacity: animation, child: child);
+              },
+            ),
+          );
+        }
       } else {
         Navigator.pushReplacement(
           context,
