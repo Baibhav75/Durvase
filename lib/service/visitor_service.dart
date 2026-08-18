@@ -4,7 +4,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 class VisitorService {
-  static const String baseUrl = 'https://durvasaayurved.com/api';
+  static const String baseUrl = 'https://durvasaayurved.online/api';
   static const int timeoutSeconds = 30;
 
   // Method to submit visitor data
@@ -50,13 +50,16 @@ class VisitorService {
         "PhotoBase64": photoBase64 ?? "",
       };
 
-      // Add optional reVisitDate if provided
-      if (reVisitDate != null && reVisitDate.isNotEmpty) {
-        requestBody["Re_visit_date"] = reVisitDate;
+      if (reVisitDate != null) {
+        requestBody["RevisitDate"] = reVisitDate;
       }
 
       print('📤 Sending visitor data to API...');
-      print('Request Body: ${json.encode(requestBody)}');
+      print('   -> RevisitDate being sent: $reVisitDate');
+      // Truncate photo for clean logging
+      final logBody = Map<String, dynamic>.from(requestBody);
+      if (logBody["PhotoBase64"] != "") logBody["PhotoBase64"] = "[BASE64_IMAGE]";
+      print('Request Body: ${json.encode(logBody)}');
 
       final response = await http
           .post(

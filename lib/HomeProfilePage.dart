@@ -6,6 +6,7 @@ import 'dart:async';
 import 'model/TodoModel.dart';
 import 'model/TodoModel1.dart';
 import 'service/api_serviceProfile.dart';
+import 'viewHome/widgets/MrprofileEdit.dart';
 
 class HomeProfilePage extends StatefulWidget {
   final TodoModel userData;
@@ -70,8 +71,27 @@ class _HomeProfilePageState extends State<HomeProfilePage> {
     }
   }
 
+  void _openEditProfileModal(Data1 employeeData) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => MrProfileEditSheet(
+        employeeData: employeeData,
+        onProfileUpdated: () {
+          if (widget.userData.mobile != null) {
+            ApiService.clearProfileCache(widget.userData.mobile);
+          }
+          _fetchProfileData();
+        },
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final firstEmp = _profileData?.firstEmployee;
+
     return Scaffold(
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
@@ -89,6 +109,14 @@ class _HomeProfilePageState extends State<HomeProfilePage> {
           icon: const Icon(Icons.arrow_back),
           onPressed: () => Navigator.of(context).pop(),
         ),
+        actions: [
+          if (firstEmp != null)
+            IconButton(
+              icon: const Icon(Icons.edit_outlined),
+              tooltip: 'Edit Profile',
+              onPressed: () => _openEditProfileModal(firstEmp),
+            ),
+        ],
       ),
       body: _isLoading
           ? _buildLoadingIndicator()
@@ -331,6 +359,34 @@ class _HomeProfilePageState extends State<HomeProfilePage> {
                 _buildSectionHeader("System Information"),
                 _buildProfileItem("Created At", employeeData.createdAt),
                 _buildProfileItem("Updated At", employeeData.updatedAt),
+
+                const SizedBox(height: 24),
+
+                // Edit Profile Button
+                SizedBox(
+                  width: double.infinity,
+                  height: 50,
+                  child: ElevatedButton.icon(
+                    onPressed: () => _openEditProfileModal(employeeData),
+                    icon: const Icon(Icons.edit_note_rounded, color: Colors.white, size: 22),
+                    label: Text(
+                      'Edit Profile Details',
+                      style: GoogleFonts.poppins(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.deepPurple,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      elevation: 2,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
               ],
             ),
           ),

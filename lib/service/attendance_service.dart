@@ -6,7 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart'; // Add this import
 
 class AttendanceService {
-  static const String baseUrl = 'https://durvasaayurved.com/api/attendance';
+  static const String baseUrl = 'https://durvasaayurved.online/api/attendance';
 
   static Future<Map<String, dynamic>> submitAttendance({
     required String employeeId,

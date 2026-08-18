@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import '../model/mr_model.dart'; // Import MrModel instead
 import '/model/visit_history_model.dart';
 class LocationService {
-  static const String baseUrl = 'https://durvasaayurved.com/API/';
+  static const String baseUrl = 'https://durvasaayurved.online/API/';
 
   static Future<MrModel?> getWorkAreaMR(String employeeId) async {
     try {

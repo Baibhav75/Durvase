@@ -57,6 +57,8 @@ class Data1 {
   String? updatedAt;
   String? empId;
   String? image;
+  String? emergenceNo;
+  String? billedGroup;
 
   Data1({
     this.id,
@@ -83,33 +85,48 @@ class Data1 {
     this.updatedAt,
     this.empId,
     this.image,
+    this.emergenceNo,
+    this.billedGroup,
   });
 
   Data1.fromJson(Map<String, dynamic> json) {
-    id = json['Id'];
-    employeeId = _parseString(json['EmployeeId']);
-    status = _parseString(json['Status']);
-    employeeCode = _parseString(json['EmployeeCode']);
-    userId = _parseString(json['UserId']);
-    password = _parseString(json['Password']);
-    joinDate = _parseString(json['JoinDate']);
-    gender = _parseString(json['Gender']);
-    name = _parseString(json['Name']);
-    fatherName = _parseString(json['FatherName']);
-    address = _parseString(json['Address']);
-    mobile = _parseString(json['Mobile']);
-    mobileAlt = _parseString(json['MobileAlt']);
-    email = _parseString(json['Email']);
-    postOffice = _parseString(json['PostOffice']);
-    country = _parseString(json['Country']);
-    state = _parseString(json['State']);
-    district = _parseString(json['District']);
-    block = _parseString(json['Block']);
-    employeeType = _parseString(json['EmployeeType']);
-    createdAt = _parseString(json['CreatedAt']);
-    updatedAt = _parseString(json['UpdatedAt']);
-    empId = _parseString(json['EmpId']);
-    image = _parseString(json['Image']);
+    id = json['Id'] is int ? json['Id'] : int.tryParse('${json['Id']}');
+    final resolvedEmpId = _parseString(
+      json['EmpId'] ??
+      json['empId'] ??
+      json['EmployeeId'] ??
+      json['employeeId'] ??
+      json['EmployeeCode'] ??
+      json['employeeCode'] ??
+      json['id'] ??
+      json['Id'],
+    );
+    empId = resolvedEmpId;
+    employeeId = resolvedEmpId;
+
+    status = _parseString(json['Status'] ?? json['status']);
+    employeeCode = _parseString(json['EmployeeCode'] ?? json['employeeCode'] ?? json['employee_code']) ?? resolvedEmpId;
+    userId = _parseString(json['UserId'] ?? json['userId'] ?? json['user_id']);
+    password = _parseString(json['Password'] ?? json['password']);
+    joinDate = _parseString(json['JoinDate'] ?? json['joinDate'] ?? json['join_date']);
+    gender = _parseString(json['Gender'] ?? json['gender']);
+    name = _parseString(json['Name'] ?? json['name'] ?? json['emp_name']);
+    fatherName = _parseString(json['FatherName'] ?? json['fatherName'] ?? json['father_name']);
+    address = _parseString(json['Address'] ?? json['address']);
+    mobile = _parseString(json['Mobile'] ?? json['mobile'] ?? json['Phone'] ?? json['phone']);
+    mobileAlt = _parseString(json['MobileAlt'] ?? json['mobileAlt'] ?? json['mobile_alt']);
+    email = _parseString(json['Email'] ?? json['email']);
+    postOffice = _parseString(json['PostOffice'] ?? json['postOffice'] ?? json['post_office']);
+    country = _parseString(json['Country'] ?? json['country']);
+    state = _parseString(json['State'] ?? json['state'] ?? json['Region'] ?? json['region']);
+    district = _parseString(json['District'] ?? json['district'] ?? json['City'] ?? json['city'] ?? json['Area'] ?? json['area']);
+    block = _parseString(json['Block'] ?? json['block']);
+    employeeType = _parseString(json['EmployeeType'] ?? json['employeeType'] ?? json['employee_type']) ?? 'MR';
+    createdAt = _parseString(json['CreatedAt'] ?? json['createdAt'] ?? json['created_at']);
+    updatedAt = _parseString(json['UpdatedAt'] ?? json['updatedAt'] ?? json['updated_at']);
+    image = _parseString(json['Image'] ?? json['image'] ?? json['ProfileImage'] ?? json['profile_image'] ?? json['Photo']);
+    emergenceNo = _parseString(json['EmergenceNo'] ?? json['emergenceNo'] ?? json['EmergencyNo'] ?? json['emergencyNo'] ?? json['emergency_no']);
+    billedGroup = _parseString(json['BilledGroup'] ?? json['billedGroup'] ?? json['BloodGroup'] ?? json['bloodGroup'] ?? json['blood_group']);
   }
 
   // Helper method to handle null and empty strings
@@ -145,7 +162,22 @@ class Data1 {
     data['UpdatedAt'] = updatedAt;
     data['EmpId'] = empId;
     data['Image'] = image;
+    data['EmergenceNo'] = emergenceNo;
+    data['BilledGroup'] = billedGroup;
     return data;
+  }
+
+  String get resolvedImageUrl {
+    if (image == null || image!.trim().isEmpty) return '';
+    final path = image!.trim();
+    if (path.startsWith('http://') || path.startsWith('https://')) {
+      return path;
+    }
+    const baseUrl = 'https://durvasaayurved.online';
+    if (path.startsWith('/')) {
+      return '$baseUrl$path';
+    }
+    return '$baseUrl/$path';
   }
 
   // Helper methods to check location data availability

@@ -6,6 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../../model/TodoModel.dart';
 import '../../model/TodoModel1.dart';
 import '../../service/api_serviceProfile.dart';
+import 'MrprofileEdit.dart';
 
 class ProfileScreen extends StatefulWidget {
   final TodoModel userData;
@@ -85,6 +86,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
+  void _openEditProfileModal(Data1 employeeData) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => MrProfileEditSheet(
+        employeeData: employeeData,
+        onProfileUpdated: () {
+          ApiService.clearProfileCache(widget.userData.mobile);
+          _fetchProfileData();
+        },
+      ),
+    );
+  }
+
   String _formatDateTime(DateTime? dateTime) {
     if (dateTime == null) return 'Unknown';
     final now = DateTime.now();
@@ -116,7 +132,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  Widget _buildProfileItem(String label, String? value) {
+  Widget _buildProfileItem(String label, String? value, {Color? valueColor}) {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 4),
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
@@ -126,7 +142,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         border: Border.all(color: Colors.grey[200]!),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.05),
+            color: Colors.grey.withValues(alpha: 0.05),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
@@ -149,10 +165,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
           Expanded(
             flex: 3,
             child: Text(
-              value ?? 'Not available',
+              value != null && value.trim().isNotEmpty && value.trim().toLowerCase() != 'null'
+                  ? value.trim()
+                  : 'Not available',
               style: GoogleFonts.poppins(
                 fontSize: 13,
-                color: Colors.black87,
+                color: valueColor ?? Colors.black87,
                 fontWeight: FontWeight.w500,
               ),
               textAlign: TextAlign.right,
@@ -185,11 +203,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
 
     final employeeData = _profileData!.data1!.first;
-    
-    // Print UserId and Employee Id as requested
-    print("UserId: ${employeeData.userId}");
-    print("Employee Id: ${employeeData.empId}");
-    
+    final imageUrl = employeeData.resolvedImageUrl;
+
     final isCached = ApiService.isProfileCached(widget.userData.mobile!);
     DateTime? lastUpdated;
     if (isCached) {
@@ -203,6 +218,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Cache indicator
             if (isCached && lastUpdated != null)
               Container(
                 padding: const EdgeInsets.all(12),
@@ -228,16 +244,128 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ],
                 ),
               ),
+
+            // Top Profile Header Card
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Colors.deepPurple, Color(0xFF512DA8)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.deepPurple.withValues(alpha: 0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Stack(
+                    children: [
+                      Container(
+                        height: 90,
+                        width: 90,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white,
+                          border: Border.all(color: Colors.white, width: 3),
+                        ),
+                        child: ClipOval(
+                          child: imageUrl.isNotEmpty
+                              ? Image.network(
+                                  imageUrl,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => const Icon(
+                                    Icons.person,
+                                    size: 50,
+                                    color: Colors.deepPurple,
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.person,
+                                  size: 50,
+                                  color: Colors.deepPurple,
+                                ),
+                        ),
+                      ),
+                      Positioned(
+                        bottom: 0,
+                        right: 0,
+                        child: GestureDetector(
+                          onTap: () => _openEditProfileModal(employeeData),
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: const BoxDecoration(
+                              color: Colors.amber,
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.edit,
+                              color: Colors.black87,
+                              size: 15,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    employeeData.name ?? 'Employee',
+                    style: GoogleFonts.poppins(
+                      fontSize: 19,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                  Text(
+                    employeeData.employeeType ?? 'Medical Representative (MR)',
+                    style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.white70,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      'Emp ID: ${employeeData.empId ?? "N/A"}',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // 1. Personal Information
             _buildSectionHeader("Personal Information"),
             _buildProfileItem("ID", employeeData.id?.toString()),
-            _buildProfileItem("Name", employeeData.name),
+            _buildProfileItem("Full Name", employeeData.name),
             _buildProfileItem("Father Name", employeeData.fatherName),
             _buildProfileItem("Gender", employeeData.gender),
+            _buildProfileItem("Blood Group", employeeData.billedGroup),
             _buildProfileItem("Join Date", employeeData.joinDate),
-            
+
+            // 2. Contact Information
             _buildSectionHeader("Contact Information"),
-            _buildProfileItem("Mobile", employeeData.mobile),
+            _buildProfileItem("Primary Mobile", employeeData.mobile),
             _buildProfileItem("Alternate Mobile", employeeData.mobileAlt),
+            _buildProfileItem("Emergency Contact", employeeData.emergenceNo, valueColor: Colors.red[700]),
             _buildProfileItem("Email", employeeData.email),
             _buildProfileItem("Address", employeeData.address),
             _buildProfileItem("Post Office", employeeData.postOffice),
@@ -246,16 +374,45 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _buildProfileItem("State", employeeData.state),
             _buildProfileItem("Country", employeeData.country),
 
+            // 3. Employment Information
             _buildSectionHeader("Employment Information"),
             _buildProfileItem("Employee ID", employeeData.empId),
+            _buildProfileItem("Employee Code", employeeData.employeeCode),
             _buildProfileItem("Employee Type", employeeData.employeeType),
             _buildProfileItem("Status", employeeData.status),
             _buildProfileItem("User ID", employeeData.userId),
 
+            // 4. System Information
             _buildSectionHeader("System Information"),
             _buildProfileItem("Created At", employeeData.createdAt),
             _buildProfileItem("Updated At", employeeData.updatedAt),
-            
+
+            const SizedBox(height: 20),
+
+            // Edit Profile Action Button
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton.icon(
+                onPressed: () => _openEditProfileModal(employeeData),
+                icon: const Icon(Icons.edit_note_rounded, color: Colors.white, size: 22),
+                label: Text(
+                  'Edit Profile Details',
+                  style: GoogleFonts.poppins(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.deepPurple,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  elevation: 2,
+                ),
+              ),
+            ),
             const SizedBox(height: 32),
           ],
         ),
@@ -280,6 +437,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
         ),
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
+          if (_profileData?.firstEmployee != null)
+            IconButton(
+              icon: const Icon(Icons.edit_outlined),
+              tooltip: 'Edit Profile',
+              onPressed: () => _openEditProfileModal(_profileData!.firstEmployee!),
+            ),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () {
@@ -356,6 +519,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                 )
               : _buildProfileContent(),
+
+
     );
   }
 }

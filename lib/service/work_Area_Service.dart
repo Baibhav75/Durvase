@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import '/model/work_area_model.dart';
 
 class WorkAreaService {
-  static const String baseUrl = 'https://durvasaayurved.com/API';
+  static const String baseUrl = 'https://durvasaayurved.online/API';
 
   static Future<List<WorkAreaModel>> getWorkAreas(String employeeId) async {
     try {

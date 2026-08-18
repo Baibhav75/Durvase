@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../../constants/app_colors.dart';
+import '../../homepage.dart';
 import '../../HomeDrawerpage/attendenceHistory.dart';
 import '../../VisitPage/VisitPage.dart';
 import '../../Doctorpage/DoctorPagefst.dart';
 import '../../OrderPage/orderPagefist.dart';
 import '../../PaymentPage/Paymentinpage.dart';
 import '../../HomeDrawerpage/FieldAllotted.dart';
+import '../../HomeDrawerpage/id_card_screen.dart';
 import '../../model/TodoModel.dart';
 import '../../model/TodoModel1.dart';
 import '../../service/api_serviceProfile.dart';
@@ -88,18 +91,26 @@ class _HomeDrawerState extends State<HomeDrawer> {
       SnackBar(
         content: Text(
           '$featureName - Coming Soon!',
-          style: GoogleFonts.poppins(),
+          style: GoogleFonts.poppins(color: AppColors.white),
         ),
-        backgroundColor: Colors.deepPurple,
+        backgroundColor: AppColors.primaryGreen,
         duration: const Duration(seconds: 2),
       ),
     );
   }
 
   Future<void> _logout() async {
-    await SessionManager.logout();
-    if (mounted) {
-      Navigator.of(context).popUntil((route) => route.isFirst);
+    try {
+      await SessionManager.logout();
+
+      if (!mounted) return;
+
+      Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const HomePage()),
+        (route) => false,
+      );
+    } catch (e) {
+      debugPrint('Logout error: $e');
     }
   }
 
@@ -107,23 +118,25 @@ class _HomeDrawerState extends State<HomeDrawer> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
           "Logout",
           style: GoogleFonts.poppins(
             fontWeight: FontWeight.w600,
-            color: Colors.deepPurple,
+            color: AppColors.primaryGreen,
           ),
         ),
         content: Text(
           "Are you sure you want to logout?",
-          style: GoogleFonts.poppins(),
+          style: GoogleFonts.poppins(color: AppColors.textDark),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
             child: Text(
               "Cancel",
-              style: GoogleFonts.poppins(color: Colors.grey[600]),
+              style: GoogleFonts.poppins(color: AppColors.textSecondary),
             ),
           ),
           TextButton(
@@ -134,7 +147,7 @@ class _HomeDrawerState extends State<HomeDrawer> {
             child: Text(
               "Logout",
               style: GoogleFonts.poppins(
-                color: Colors.red,
+                color: AppColors.error,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -146,8 +159,15 @@ class _HomeDrawerState extends State<HomeDrawer> {
 
   Widget _buildDrawerItem(IconData icon, String title, VoidCallback onTap) {
     return ListTile(
-      leading: Icon(icon, color: Colors.white),
-      title: Text(title, style: GoogleFonts.poppins(color: Colors.white)),
+      leading: Icon(icon, color: AppColors.primaryGold),
+      title: Text(
+        title,
+        style: GoogleFonts.poppins(
+          color: AppColors.white,
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
       onTap: onTap,
     );
   }
@@ -156,29 +176,43 @@ class _HomeDrawerState extends State<HomeDrawer> {
     final employeeData = _profileData?.data1?.first;
 
     return DrawerHeader(
-      decoration: const BoxDecoration(color: Colors.deepPurple),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [AppColors.darkGreen, AppColors.primaryGreen],
+        ),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Row(
             children: [
-              CircleAvatar(
-                radius: 30,
-                backgroundColor: Colors.white,
-                backgroundImage: employeeData?.image != null
-                    ? NetworkImage(employeeData!.image!)
-                    : const AssetImage('assets/durvasa_logo.png')
-                        as ImageProvider,
-                child: employeeData?.image == null
-                    ? const Icon(
-                        Icons.person,
-                        color: Colors.deepPurple,
-                        size: 30,
-                      )
-                    : null,
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: AppColors.primaryGold,
+                    width: 2,
+                  ),
+                ),
+                child: CircleAvatar(
+                  radius: 28,
+                  backgroundColor: AppColors.white,
+                  backgroundImage: employeeData?.image != null
+                      ? NetworkImage(employeeData!.image!)
+                      : const AssetImage('assets/durvasa_logo.png') as ImageProvider,
+                  child: employeeData?.image == null
+                      ? const Icon(
+                          Icons.person,
+                          color: AppColors.primaryGreen,
+                          size: 30,
+                        )
+                      : null,
+                ),
               ),
-              const SizedBox(width: 16),
+              const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -186,33 +220,30 @@ class _HomeDrawerState extends State<HomeDrawer> {
                     Text(
                       employeeData?.name ?? widget.userData.name ?? 'Employee',
                       style: GoogleFonts.poppins(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.white,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 2),
                     Text(
-                      employeeData?.email ??
-                          widget.userData.email ??
-                          'employee@email.com',
+                      employeeData?.email ?? widget.userData.email ?? 'employee@email.com',
                       style: GoogleFonts.poppins(
-                        color: Colors.white70,
-                        fontSize: 14,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      employeeData?.employeeType ??
-                          widget.userData.employeeType ??
-                          'Employee Type',
-                      style: GoogleFonts.poppins(
-                        color: Colors.white70,
+                        color: AppColors.cream.withOpacity(0.9),
                         fontSize: 12,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      employeeData?.employeeType ?? widget.userData.employeeType ?? 'Staff Member',
+                      style: GoogleFonts.poppins(
+                        color: AppColors.lightGold,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
                       ),
                     ),
                   ],
@@ -234,14 +265,15 @@ class _HomeDrawerState extends State<HomeDrawer> {
                 );
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.deepPurple,
+                backgroundColor: AppColors.white,
+                foregroundColor: AppColors.primaryGreen,
                 padding: const EdgeInsets.symmetric(
                   horizontal: 12,
                   vertical: 6,
                 ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(12),
+                  side: const BorderSide(color: AppColors.primaryGold, width: 1),
                 ),
                 elevation: 2,
               ),
@@ -250,6 +282,7 @@ class _HomeDrawerState extends State<HomeDrawer> {
                 style: GoogleFonts.poppins(
                   fontSize: 12,
                   fontWeight: FontWeight.w600,
+                  color: AppColors.primaryGreen,
                 ),
               ),
             ),
@@ -263,7 +296,7 @@ class _HomeDrawerState extends State<HomeDrawer> {
   Widget build(BuildContext context) {
     return Drawer(
       child: Container(
-        color: Colors.deepPurple,
+        color: AppColors.primaryGreen,
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
@@ -272,7 +305,7 @@ class _HomeDrawerState extends State<HomeDrawer> {
                     height: 200,
                     alignment: Alignment.center,
                     child: const CircularProgressIndicator(
-                      valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
+                      valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryGold),
                     ),
                   )
                 : _buildDrawerProfileHeader(),
@@ -280,21 +313,29 @@ class _HomeDrawerState extends State<HomeDrawer> {
                 _profileData!.data1 != null &&
                 _profileData!.data1!.isNotEmpty)
               Container(
-                color: Colors.deepPurple[700],
+                color: AppColors.darkGreen,
                 padding: const EdgeInsets.all(16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                 ),
               )
             else if (_drawerProfileErrorMessage != null)
-              Container(), // empty fallback
+              Container(),
 
             const SizedBox(height: 10),
             _buildDrawerItem(Icons.dashboard, "Dashboard", () {
               Navigator.pop(context);
             }),
-            _buildDrawerItem(Icons.assignment, "Field Allotted", () {
+            _buildDrawerItem(Icons.badge, "Employee ID Card", () {
               Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => IdCardScreen(userData: widget.userData),
+                ),
+              );
+            }),
+            _buildDrawerItem(Icons.assignment, "Field Allotted", () {
               Navigator.push(
                 context,
                 MaterialPageRoute(
@@ -341,15 +382,18 @@ class _HomeDrawerState extends State<HomeDrawer> {
                 MaterialPageRoute(builder: (context) => const PaymentPageFst()),
               );
             }),
-            const Divider(color: Colors.white70),
+            Divider(color: AppColors.white.withOpacity(0.2)),
             _buildDrawerItem(Icons.settings, "Settings", () {
               Navigator.pop(context);
               _showComingSoon(context, "Settings");
             }),
-            _buildDrawerItem(Icons.exit_to_app, "Logout", () {
-              Navigator.pop(context);
-              _showLogoutDialog(context);
-            }),
+            _buildDrawerItem(
+              Icons.exit_to_app,
+              "Logout",
+              () {
+                _showLogoutDialog(context);
+              },
+            ),
           ],
         ),
       ),

@@ -8,7 +8,7 @@ class MrService {
       // Replace with your actual API endpoint
       final response = await http.get(
         Uri.parse(
-          'https://your-api-url.com/api/workarea?EmployeeId=$employeeId',
+          'https://your-api-url.online/api/workarea?EmployeeId=$employeeId',
         ),
       );
 

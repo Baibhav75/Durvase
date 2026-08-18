@@ -79,50 +79,42 @@ class _ProductScreenState extends State<ProductScreen> {
 
   Future<void> _addToCart(Product product) async {
     try {
-      final loginData = await SessionManager.getLoginData();
-      if (loginData != null && loginData.mobile != null) {
-        final profileData = await ApiService.fetchProfile(loginData.mobile!);
-        if (profileData != null && profileData.data1 != null && profileData.data1!.isNotEmpty) {
-          final userId = profileData.data1!.first.userId;
-          if (userId != null) {
-            final url = Uri.parse('https://durvasaayurved.com/api/AddToCart/AddToCart?ProductID=${product.productId}&UserID=$userId');
-            final response = await http.post(url);
-            if (response.statusCode == 200) {
-              final jsonResponse = jsonDecode(response.body);
-              if (jsonResponse['status'] == true) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(jsonResponse['message'] ?? '${product.productName} added to cart'),
-                      duration: const Duration(seconds: 2),
-                    ),
-                  );
-                }
-              } else {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(jsonResponse['message'] ?? 'Failed to add to cart'),
-                      duration: const Duration(seconds: 2),
-                    ),
-                  );
-                }
-              }
-            } else {
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Server error occurred')),
-                );
-              }
+      if (widget.userId.isNotEmpty) {
+        final url = Uri.parse('https://durvasaayurved.online/api/AddToCart/AddToCart?ProductID=${product.productId}&UserID=${widget.userId}&Qty=1');
+        final response = await http.post(url);
+        if (response.statusCode == 200) {
+          final jsonResponse = jsonDecode(response.body);
+          if (jsonResponse['status'] == true) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(jsonResponse['message'] ?? '${product.productName} added to cart'),
+                  duration: const Duration(seconds: 2),
+                ),
+              );
             }
+          } else {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(jsonResponse['message'] ?? 'Failed to add to cart'),
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+            }
+          }
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Server error. Please try again later.'),
+                duration: Duration(seconds: 2),
+              ),
+            );
           }
         }
       } else {
-        if (mounted) {
-           ScaffoldMessenger.of(context).showSnackBar(
-             const SnackBar(content: Text('Please login to add to cart')),
-           );
-        }
+
       }
     } catch (e) {
       if (mounted) {
@@ -332,7 +324,7 @@ class _ProductScreenState extends State<ProductScreen> {
                   ),
                   child: product.image1.isNotEmpty
                       ? Image.network(
-                          'https://durvasaayurved.com${product.image1}',
+                          'https://durvasaayurved.online${product.image1}',
                           fit: BoxFit.contain,
                           errorBuilder: (context, error, stackTrace) => Icon(
                             Icons.image_not_supported,

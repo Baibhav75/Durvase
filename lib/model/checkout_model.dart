@@ -16,16 +16,26 @@ class CheckoutResponse {
   });
 
   factory CheckoutResponse.fromJson(Map<String, dynamic> json) {
+    final customer = json["Customer"] ?? {};
+    final shipping = json["ShippingAddress"] ?? {};
+    final wallet = json["Wallet"] ?? {};
+
     return CheckoutResponse(
       status: json["Status"] ?? false,
       message: json["Message"] ?? "",
-      user: CheckoutUser.fromJson(json["User"] ?? {}),
-      cart: (json["Cart"] as List<dynamic>? ?? [])
+      user: CheckoutUser(
+        fullName: customer["Name"]?.toString() ?? "",
+        mobile: customer["Mobile"]?.toString() ?? "",
+        email: customer["Email"]?.toString() ?? "",
+        permanentAddress: shipping["Address"]?.toString() ?? "",
+        city: shipping["District"]?.toString() ?? "",
+        state: shipping["State"]?.toString() ?? "",
+      ),
+      cart: (json["CartItems"] as List<dynamic>? ?? [])
           .map((e) => CartItem.fromJson(e))
           .toList(),
-      summary: Summary.fromJson(json["Summary"] ?? {}),
-      isEligibleToUsePoint:
-      json["IsEligibleToUsePoint"] ?? false,
+      summary: Summary.fromJson(json["OrderSummary"] ?? {}),
+      isEligibleToUsePoint: wallet["Eligible"] ?? false,
     );
   }
 }
@@ -52,8 +62,7 @@ class CheckoutUser {
       fullName: json["FullName"] ?? "",
       mobile: json["Mobile"] ?? "",
       email: json["Email"] ?? "",
-      permanentAddress:
-      json["PermanentAddress"] ?? "",
+      permanentAddress: json["PermanentAddress"] ?? "",
       city: json["City"] ?? "",
       state: json["State"] ?? "",
     );
@@ -89,20 +98,17 @@ class CartItem {
 
   factory CartItem.fromJson(Map<String, dynamic> json) {
     return CartItem(
-      id: json["ID"] ?? 0,
-      productID: json["ProductID"] ?? "",
-      productName: json["ProductName"] ?? "",
-      uniqueID: json["UniqueID"] ?? "",
-      listedPrice:
-      (json["listedPrice"] ?? 0).toDouble(),
-      sellingPrice:
-      (json["SellingPrice"] ?? 0).toDouble(),
-      qty: json["QTY"] ?? 0,
-      image: json["Image"] ?? "",
+      id: json["Id"] ?? 0,
+      productID: json["ProductID"]?.toString() ?? "",
+      productName: json["ProductName"]?.toString() ?? "",
+      uniqueID: json["UniqueID"]?.toString() ?? "",
+      listedPrice: (json["ListedPrice"] ?? 0).toDouble(),
+      sellingPrice: (json["SellingPrice"] ?? 0).toDouble(),
+      qty: json["Qty"] ?? 0,
+      image: json["Image"]?.toString() ?? "",
       gst: json["GST"]?.toString(),
-      productPoint: json["ProductPoint"] ?? "",
-      productPercentage:
-      json["ProductPercentage"]?.toString(),
+      productPoint: json["ProductPoint"]?.toString() ?? "",
+      productPercentage: json["ProductPercentage"]?.toString(),
     );
   }
 }
@@ -122,14 +128,10 @@ class Summary {
 
   factory Summary.fromJson(Map<String, dynamic> json) {
     return Summary(
-      totalListedPrice:
-      (json["totalListedPrice"] ?? 0).toDouble(),
-      totalSellingPrice:
-      (json["totalSellingPrice"] ?? 0).toDouble(),
-      discount:
-      (json["Discount"] ?? 0).toDouble(),
-      finalAmount:
-      (json["FinalAmount"] ?? 0).toDouble(),
+      totalListedPrice: (json["ListedTotal"] ?? 0).toDouble(),
+      totalSellingPrice: (json["SellingTotal"] ?? 0).toDouble(),
+      discount: (json["Discount"] ?? 0).toDouble(),
+      finalAmount: (json["FinalAmount"] ?? 0).toDouble(),
     );
   }
 }

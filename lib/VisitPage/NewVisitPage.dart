@@ -9,6 +9,7 @@ import '/service/dynamic_location_service.dart'; // Added import for dynamic loc
 import '../model/TodoModel1.dart'; // For employee data
 // Added import for location data model
 import '/model/location_dart_model.dart';
+
 class NewVisitForm extends StatefulWidget {
   final Data1? employeeData;
 
@@ -209,9 +210,10 @@ class _NewVisitFormState extends State<NewVisitForm> {
     }
   }
 
-  // Format date for API (YYYY-MM-DD)
+  // Format date for API (YYYY-MM-DDTHH:mm:ss)
   String _formatDateForAPI(DateTime date) {
-    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+    final now = DateTime.now();
+    return '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}T${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}:${now.second.toString().padLeft(2, '0')}';
   }
 
   // Camera permission methods
@@ -476,6 +478,12 @@ class _NewVisitFormState extends State<NewVisitForm> {
       print('   📍 State: $selectedState');
       print('   📍 District: $selectedDistrict');
       print('   📍 Block: $selectedBlock');
+      print('   📅 Re-Visited: ${reVisitRequired == true ? 'Yes' : 'No'}');
+      
+      final calculatedRevisitDate = reVisitRequired == true && _selectedReVisitDate != null
+          ? _formatDateForAPI(_selectedReVisitDate!)
+          : null;
+      print('   📅 RevisitDate (Formatted): $calculatedRevisitDate');
 
       final result = await VisitorService.submitVisitorData(
         empType: empType,
@@ -495,9 +503,7 @@ class _NewVisitFormState extends State<NewVisitForm> {
         reVisited: reVisitRequired == true ? 'Yes' : 'No',
         remark: remarksController.text,
         photoBase64: _imageToBase64(_capturedImage),
-        reVisitDate: reVisitRequired == true && _selectedReVisitDate != null
-            ? _formatDateForAPI(_selectedReVisitDate!)
-            : null,
+        reVisitDate: calculatedRevisitDate,
       );
 
       setState(() {

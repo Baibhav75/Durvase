@@ -8,6 +8,7 @@ import '../model/visit_history_model.dart';
 import '../service/visit_history_service.dart';
 import '../model/TodoModel.dart';
 import '/model/TodoModel1.dart';
+import '/VisitPage/taskVisitFormenter.dart';
 
 class ReVisitPage extends StatefulWidget {
   final Data1? employeeData;
@@ -393,12 +394,15 @@ class _ReVisitPageState extends State<ReVisitPage> {
               Expanded(
                 child: ElevatedButton(
                   onPressed: () {
-                    Navigator.pop(context);
-                    _showSnackBar(
-                      'Re-visit continued for ${visit.personName ?? 'customer'}',
-                      Colors.green,
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => NewVisitFormr(
+                          employeeData: widget.employeeData,
+                          prefillData: visit,
+                        ),
+                      ),
                     );
-                    // TODO: Add your actual re-visit continuing logic here
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.green,
@@ -653,12 +657,25 @@ class _ReVisitPageState extends State<ReVisitPage> {
     return Material(
       elevation: 2,
       borderRadius: BorderRadius.circular(16),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.grey[100]!),
-        ),
+      color: Colors.white,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) => NewVisitFormr(
+                employeeData: widget.employeeData,
+                prefillData: visit,
+              ),
+            ),
+          );
+        },
+        child: Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.grey[100]!),
+          ),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -839,6 +856,7 @@ class _ReVisitPageState extends State<ReVisitPage> {
           ),
         ),
       ),
+    ),
     );
   }
 

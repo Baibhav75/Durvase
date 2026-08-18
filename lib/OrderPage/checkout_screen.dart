@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
+import '../PaymentPage/payment_screen.dart';
 import '../model/checkout_model.dart';
 import '../service/Auth_servcie.dart';
+import '../service/session_manager.dart';
+import '../service/api_serviceProfile.dart';
+import 'OrderSummaryScreen.dart';
 
 class CheckoutScreen extends StatefulWidget {
   final String userId;
@@ -17,12 +21,36 @@ class CheckoutScreen extends StatefulWidget {
 }
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
+
+  Future<CheckoutResponse?> loadCheckout() async {
+    final loginData = await SessionManager.getLoginData();
+    if (loginData == null || loginData.mobile == null) {
+      throw Exception("Login not found");
+    }
+
+    final profile = await ApiService.fetchProfile(loginData.mobile!);
+    if (profile == null) {
+      throw Exception("Profile not found");
+    }
+
+    final employee = profile.firstEmployee;
+    if (employee == null || employee.userId == null) {
+      throw Exception("User ID not found in profile");
+    }
+
+    final trueUserId = employee.userId!;
+    print("Checkout UserId : $trueUserId");
+
+    return AuthService().getCheckout(trueUserId);
+  }
+
+
   late Future<CheckoutResponse?> checkoutFuture;
 
   @override
   void initState() {
     super.initState();
-    checkoutFuture = AuthService().getCheckout(widget.userId);
+    checkoutFuture = loadCheckout();
   }
 
   @override
@@ -69,7 +97,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   ElevatedButton(
                     onPressed: () {
                       setState(() {
-                        checkoutFuture = AuthService().getCheckout(widget.userId);
+                        checkoutFuture = loadCheckout();
                       });
                     },
                     style: ElevatedButton.styleFrom(backgroundColor: Colors.deepPurple),
@@ -149,6 +177,19 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                       ),
                                     ],
                                   ),
+                                  if (checkout.user.email.isNotEmpty) ...[
+                                    const SizedBox(height: 2),
+                                    Row(
+                                      children: [
+                                        const Icon(Icons.email, size: 14, color: Colors.grey),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          checkout.user.email,
+                                          style: GoogleFonts.poppins(color: Colors.grey.shade700, fontSize: 13),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),
@@ -234,16 +275,41 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                   const SizedBox(height: 6),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: Colors.grey.shade100,
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                      "Qty: ${item.qty}",
-                                      style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey.shade800),
-                                    ),
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: Colors.grey.shade100,
+                                          borderRadius: BorderRadius.circular(6),
+                                        ),
+                                        child: Text(
+                                          "Qty: ${item.qty}",
+                                          style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey.shade800),
+                                        ),
+                                      ),
+                                      if (item.productPoint.isNotEmpty) ...[
+                                        const SizedBox(width: 8),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: Colors.orange.shade50,
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          child: Text(
+                                            "${item.productPoint} Pts",
+                                            style: GoogleFonts.poppins(fontSize: 12, color: Colors.orange.shade800),
+                                          ),
+                                        ),
+                                      ],
+                                      if (item.gst != null && item.gst!.isNotEmpty) ...[
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          "GST: ${item.gst}%",
+                                          style: GoogleFonts.poppins(fontSize: 11, color: Colors.grey.shade600),
+                                        ),
+                                      ],
+                                    ],
                                   ),
                                 ],
                               ),
@@ -308,6 +374,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         buildRow("Selling Price", "₹${checkout.summary.totalSellingPrice}"),
                         const SizedBox(height: 10),
                         buildRow("Discount", "- ₹${checkout.summary.discount}", isDiscount: true),
+                        if (checkout.isEligibleToUsePoint) ...[
+                          const SizedBox(height: 10),
+                          buildRow("Points Eligible", "Yes", isDiscount: true),
+                        ],
                         const Padding(
                           padding: EdgeInsets.symmetric(vertical: 16),
                           child: Divider(height: 1, thickness: 1),
@@ -383,6 +453,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           elevation: 0,
                         ),
                         onPressed: () {
+
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) =>  PaymentScreen(),
+                            ),
+                          );
                           // Place Order API call
                         },
                         child: Text(
