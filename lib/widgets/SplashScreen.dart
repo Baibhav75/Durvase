@@ -1,9 +1,13 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import '../DealerAdministister/dealer_dashboard_screen.dart';
+import '../RetailerAdministister/retailer_dashboard_screen.dart';
 import '../constants/app_colors.dart';
 import '../AsmAdministister/asmHomePage.dart';
 import '../employeehomePage.dart';
 import '../homepage.dart';
+import '../service/Dealer_service/dealer_session_manager.dart';
+import '../service/Retailer_service/retailer_session_manager.dart';
 import '../service/app_security_service.dart';
 import 'app_unlock_screen.dart';
 import '/model/TodoModel.dart';
@@ -119,23 +123,114 @@ class _SplashScreenState extends State<SplashScreen>
     _mainController.forward();
   }
 
+  // Future<void> _checkLoginStatus() async {
+  //   try {
+  //     // Run splash minimum delay concurrently with session loading (2.8s for smooth animation)
+  //     final splashDelay = Future.delayed(const Duration(milliseconds: 2800));
+  //
+  //     final bool loggedIn = await SessionManager.isLoggedIn();
+  //     TodoModel? userData;
+  //
+  //     if (loggedIn) {
+  //       userData = await SessionManager.getLoginData();
+  //     }
+  //
+  //     await splashDelay;
+  //
+  //     if (!mounted) return;
+  //
+  //     if (loggedIn && userData != null) {
+  //       final bool isAsm = userData.employeeType?.toLowerCase().contains('asm') == true ||
+  //           userData.employeeType?.toLowerCase().contains('ams') == true;
+  //
+  //       final bool securityEnabled = await AppSecurityService.isSecurityEnabled();
+  //
+  //       if (securityEnabled) {
+  //         Navigator.pushReplacement(
+  //           context,
+  //           PageRouteBuilder(
+  //             transitionDuration: const Duration(milliseconds: 700),
+  //             pageBuilder: (context, animation, secondaryAnimation) => AppUnlockScreen(
+  //               userData: userData!,
+  //               userId: userData.empId?.toString() ?? '',
+  //               isAsm: isAsm,
+  //             ),
+  //             transitionsBuilder: (context, animation, secondaryAnimation, child) {
+  //               return FadeTransition(opacity: animation, child: child);
+  //             },
+  //           ),
+  //         );
+  //       } else {
+  //         Navigator.pushReplacement(
+  //           context,
+  //           PageRouteBuilder(
+  //             transitionDuration: const Duration(milliseconds: 700),
+  //             pageBuilder: (context, animation, secondaryAnimation) => isAsm
+  //                 ? AsmhomepageHomePage(
+  //                     userData: userData!,
+  //                     userId: userData.empId?.toString() ?? '',
+  //                   )
+  //                 : EmployeeHomePage(
+  //                     userData: userData!,
+  //                     userId: userData.empId?.toString() ?? '',
+  //                   ),
+  //             transitionsBuilder: (context, animation, secondaryAnimation, child) {
+  //               return FadeTransition(opacity: animation, child: child);
+  //             },
+  //           ),
+  //         );
+  //       }
+  //     } else {
+  //       Navigator.pushReplacement(
+  //         context,
+  //         PageRouteBuilder(
+  //           transitionDuration: const Duration(milliseconds: 700),
+  //           pageBuilder: (context, animation, secondaryAnimation) => const HomePage(),
+  //           transitionsBuilder: (context, animation, secondaryAnimation, child) {
+  //             return FadeTransition(opacity: animation, child: child);
+  //           },
+  //         ),
+  //       );
+  //     }
+  //   } catch (e, stackTrace) {
+  //     debugPrint('Error in splash screen: $e');
+  //     debugPrint('Stack trace: $stackTrace');
+  //     if (mounted) {
+  //       Navigator.pushReplacement(
+  //         context,
+  //         MaterialPageRoute(builder: (context) => const HomePage()),
+  //       );
+  //     }
+  //   }
+  // }
+
   Future<void> _checkLoginStatus() async {
     try {
-      // Run splash minimum delay concurrently with session loading (2.8s for smooth animation)
       final splashDelay = Future.delayed(const Duration(milliseconds: 2800));
 
-      final bool loggedIn = await SessionManager.isLoggedIn();
+      final bool employeeLoggedIn = await SessionManager.isLoggedIn();
       TodoModel? userData;
 
-      if (loggedIn) {
+      if (employeeLoggedIn) {
         userData = await SessionManager.getLoginData();
+      }
+
+      // Check Dealer / Retailer only if Employee session not found
+      bool dealerLoggedIn = false;
+      bool retailerLoggedIn = false;
+      if (!employeeLoggedIn || userData == null) {
+        dealerLoggedIn = await DealerSessionManager.isLoggedIn();
+        if (!dealerLoggedIn) {
+          retailerLoggedIn = await RetailerSessionManager.isLoggedIn(); // 👈 uncommented
+        }
       }
 
       await splashDelay;
 
       if (!mounted) return;
 
-      if (loggedIn && userData != null) {
+      if (employeeLoggedIn && userData != null) {
+        // ---- Existing Employee / ASM flow (unchanged) ----
         final bool isAsm = userData.employeeType?.toLowerCase().contains('asm') == true ||
             userData.employeeType?.toLowerCase().contains('ams') == true;
 
@@ -163,20 +258,45 @@ class _SplashScreenState extends State<SplashScreen>
               transitionDuration: const Duration(milliseconds: 700),
               pageBuilder: (context, animation, secondaryAnimation) => isAsm
                   ? AsmhomepageHomePage(
-                      userData: userData!,
-                      userId: userData.empId?.toString() ?? '',
-                    )
+                userData: userData!,
+                userId: userData.empId?.toString() ?? '',
+              )
                   : EmployeeHomePage(
-                      userData: userData!,
-                      userId: userData.empId?.toString() ?? '',
-                    ),
+                userData: userData!,
+                userId: userData.empId?.toString() ?? '',
+              ),
               transitionsBuilder: (context, animation, secondaryAnimation, child) {
                 return FadeTransition(opacity: animation, child: child);
               },
             ),
           );
         }
+      } else if (dealerLoggedIn) {
+        // ---- Dealer flow ----
+        Navigator.pushReplacement(
+          context,
+          PageRouteBuilder(
+            transitionDuration: const Duration(milliseconds: 700),
+            pageBuilder: (context, animation, secondaryAnimation) => const DealerDashboardPage(),
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              return FadeTransition(opacity: animation, child: child);
+            },
+          ),
+        );
+      } else if (retailerLoggedIn) {
+        // ---- Retailer flow ----
+        Navigator.pushReplacement(
+          context,
+          PageRouteBuilder(
+            transitionDuration: const Duration(milliseconds: 700),
+            pageBuilder: (context, animation, secondaryAnimation) => const RetailerDashboardPage(), // 👈 fixed
+            transitionsBuilder: (context, animation, secondaryAnimation, child) {
+              return FadeTransition(opacity: animation, child: child);
+            },
+          ),
+        );
       } else {
+        // ---- Nobody logged in ----
         Navigator.pushReplacement(
           context,
           PageRouteBuilder(
@@ -198,9 +318,7 @@ class _SplashScreenState extends State<SplashScreen>
         );
       }
     }
-  }
-
-  @override
+  }  @override
   void dispose() {
     _mainController.dispose();
     _pulseController.dispose();

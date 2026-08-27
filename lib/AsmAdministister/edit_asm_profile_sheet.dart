@@ -50,6 +50,7 @@ class _EditAsmProfileSheetState extends State<EditAsmProfileSheet> {
   @override
   void initState() {
     super.initState();
+    _securityController.loadSecuritySettings();
     _nameController = TextEditingController(text: widget.profile.name ?? '');
     _mobileController = TextEditingController(text: widget.profile.mobile ?? '');
     _emailController = TextEditingController(text: widget.profile.email ?? '');
@@ -568,7 +569,10 @@ class _EditAsmProfileSheetState extends State<EditAsmProfileSheet> {
                   value: isFpEnabled,
                   activeThumbColor: AppColors.white,
                   activeTrackColor: AppColors.primaryGreen,
-                  onChanged: (val) => _securityController.toggleFingerprint(val, context: context),
+                  onChanged: (val) async {
+                    await _securityController.toggleFingerprint(val, context: context);
+                    if (mounted) setState(() {});
+                  },
                 ),
 
                 Divider(height: 1, color: Colors.grey[200]),
@@ -622,7 +626,10 @@ class _EditAsmProfileSheetState extends State<EditAsmProfileSheet> {
                   value: isPwdEnabled,
                   activeThumbColor: AppColors.white,
                   activeTrackColor: AppColors.primaryGreen,
-                  onChanged: (val) => _securityController.toggleAppPassword(val, context: context),
+                  onChanged: (val) async {
+                    await _securityController.toggleAppPassword(val, context: context);
+                    if (mounted) setState(() {});
+                  },
                 ),
               ],
             );

@@ -3,18 +3,20 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../../constants/app_colors.dart';
 import '../../homepage.dart';
-import '../../HomeDrawerpage/attendenceHistory.dart';
 import '../../VisitPage/VisitPage.dart';
 import '../../Doctorpage/DoctorPagefst.dart';
 import '../../PaymentPage/Paymentinpage.dart';
-import '../../HomeDrawerpage/FieldAllotted.dart';
 import '../../HomeDrawerpage/id_card_screen.dart';
 import '../../model/TodoModel.dart';
 import '../../model/TodoModel1.dart';
 import '../../service/api_serviceProfile.dart';
 import '../../service/session_manager.dart';
+import 'AsmFieldAllotted.dart';
+import 'asm_business_page.dart';
 import 'asm_profile_page.dart';
+import 'asm_work_report_page.dart';
 import 'attendance_history_page.dart';
+import '../widgets/gemini_widget.dart';
 
 class AsmDrawer extends StatefulWidget {
   final TodoModel userData;
@@ -404,7 +406,6 @@ class _AsmDrawerState extends State<AsmDrawer> {
       ),
     );
   }
-
   // ============================================================
   // BUILD
   // ============================================================
@@ -455,8 +456,8 @@ class _AsmDrawerState extends State<AsmDrawer> {
               icon: Icons.assignment,
               title: 'Field Allotted',
               onTap: () => _goTo(
-                FieldAllotted(
-                  employeeId: widget.userData.empId ?? widget.userData.asmId ?? '',
+                AmrAssineFieldPage(
+                  userData: widget.userData,
                 ),
               ),
             ),
@@ -472,12 +473,19 @@ class _AsmDrawerState extends State<AsmDrawer> {
               ),
             ),
 
+            // Report
+            _drawerItem(
+              icon: Icons.bar_chart,
+              title: 'My Report',
+              onTap: (){}
+            ),
+
             // Doctor Visits
             _drawerItem(
               icon: Icons.medical_services,
               title: 'Doctor Visits',
               onTap: () => _goTo(
-                DoctorPagefst(),
+                DoctorReportPage(),
               ),
             ),
 
@@ -486,7 +494,14 @@ class _AsmDrawerState extends State<AsmDrawer> {
               icon: Icons.business,
               title: 'Business Visit',
               onTap: () => _goTo(
-                const Visitpage(),
+                const BusinessPage(),
+              ),
+            ),
+            _drawerItem(
+              icon: Icons.business,
+              title: 'work Report',
+              onTap: () => _goTo(
+                const ASMWorkReportPage(),
               ),
             ),
 
@@ -506,6 +521,16 @@ class _AsmDrawerState extends State<AsmDrawer> {
               onTap: () => _goTo(
                 const PaymentPageFst(),
               ),
+            ),
+
+            // Durvasa AI Assistant
+            _drawerItem(
+              icon: Icons.auto_awesome_rounded,
+              title: 'Durvasa AI Assistant',
+              onTap: () {
+                Navigator.pop(context);
+                DurvasaAiAssistantSheet.show(context);
+              },
             ),
 
             Divider(

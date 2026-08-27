@@ -6,7 +6,6 @@ import '../../homepage.dart';
 import '../../HomeDrawerpage/attendenceHistory.dart';
 import '../../VisitPage/VisitPage.dart';
 import '../../Doctorpage/DoctorPagefst.dart';
-import '../../OrderPage/orderPagefist.dart';
 import '../../PaymentPage/Paymentinpage.dart';
 import '../../HomeDrawerpage/FieldAllotted.dart';
 import '../../HomeDrawerpage/id_card_screen.dart';
@@ -14,6 +13,7 @@ import '../../model/TodoModel.dart';
 import '../../model/TodoModel1.dart';
 import '../../service/api_serviceProfile.dart';
 import '../../service/session_manager.dart';
+import 'mr_work_report_page.dart';
 import 'profile_screen.dart';
 
 class HomeDrawer extends StatefulWidget {
@@ -231,7 +231,7 @@ class _HomeDrawerState extends State<HomeDrawer> {
                     Text(
                       employeeData?.email ?? widget.userData.email ?? 'employee@email.com',
                       style: GoogleFonts.poppins(
-                        color: AppColors.cream.withOpacity(0.9),
+                        color: AppColors.cream.withValues(alpha: 0.9),
                         fontSize: 12,
                       ),
                       maxLines: 1,
@@ -358,7 +358,7 @@ class _HomeDrawerState extends State<HomeDrawer> {
               Navigator.pop(context);
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => DoctorPagefst()),
+                MaterialPageRoute(builder: (context) =>DoctorReportPage()),
               );
             }),
             _buildDrawerItem(Icons.business, "Business Visit", () {
@@ -382,7 +382,17 @@ class _HomeDrawerState extends State<HomeDrawer> {
                 MaterialPageRoute(builder: (context) => const PaymentPageFst()),
               );
             }),
-            Divider(color: AppColors.white.withOpacity(0.2)),
+            _buildDrawerItem(Icons.assignment_turned_in_rounded, "MR Work Report", () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => MrWorkReportPage(userData: widget.userData),
+                ),
+              );
+            }),
+
+            Divider(color: AppColors.white.withValues(alpha: 0.2)),
             _buildDrawerItem(Icons.settings, "Settings", () {
               Navigator.pop(context);
               _showComingSoon(context, "Settings");

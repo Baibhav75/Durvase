@@ -3,12 +3,12 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../constants/app_colors.dart';
 import '../model/TodoModel.dart';
+import '../model/amr_assine_field_model.dart';
+import '../service/api_service.dart';
+import '../service/session_manager.dart';
 import '/controller/countryController.dart';
 import '../model/country_model.dart';
 import '/controller/state_controller.dart';
-import '../model/state_model.dart';
-import '../model/district_model.dart';
-import '../model/block_model.dart';
 import 'package:get/get.dart';
 
 class YourTeamPage extends StatefulWidget {
@@ -26,7 +26,11 @@ class YourTeamPage extends StatefulWidget {
 class _YourTeamPageState extends State<YourTeamPage> {
   late final CountryController countryController;
   late final StateController stateController;
-  // Search & Filter State
+
+  // View Switcher: 0 = Team Members (MR List), 1 = Assigned Field (Allotted Areas)
+  int _selectedViewTab = 0;
+
+  // Search & Filter State for Team Members
   final TextEditingController _searchController = TextEditingController();
 
   String? _selectedState;
@@ -41,6 +45,13 @@ class _YourTeamPageState extends State<YourTeamPage> {
   bool _isLoading = false;
   List<TeamMember> _allTeamMembers = [];
   List<TeamMember> _filteredMembers = [];
+
+  // Assigned Field State (Live from ApiService.getASM)
+  final TextEditingController _assignedFieldSearchController = TextEditingController();
+  List<AmrAssineField> _allAssignedFields = [];
+  List<AmrAssineField> _filteredAssignedFields = [];
+  bool _isAssignedFieldLoading = false;
+  String? _assignedFieldError;
 
   // Hierarchical State -> District -> Block data dictionary
   final Map<String, Map<String, List<String>>> _locationHierarchy = {
@@ -121,13 +132,79 @@ class _YourTeamPageState extends State<YourTeamPage> {
       _filterTeamMembers,
     );
 
+    _assignedFieldSearchController.addListener(
+      _filterAssignedFields,
+    );
+
     _loadInitialTeamData();
+    _loadAssignedFields();
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _assignedFieldSearchController.dispose();
     super.dispose();
+  }
+
+  // ============================================================
+  // LOAD ASSIGNED FIELDS (Live from ApiService.getASM)
+  // ============================================================
+  Future<void> _loadAssignedFields() async {
+    if (!mounted) return;
+
+    setState(() {
+      _isAssignedFieldLoading = true;
+      _assignedFieldError = null;
+    });
+
+    try {
+      String empId = widget.userData?.empId ?? widget.userData?.asmId ?? '';
+      if (empId.isEmpty) {
+        empId = await SessionManager.getEmpId() ?? '';
+      }
+
+      if (empId.isEmpty) {
+        throw Exception('Employee ID is missing. Unable to fetch assigned fields.');
+      }
+
+      final response = await ApiService.getASM(empId);
+
+      if (!mounted) return;
+
+      setState(() {
+        _allAssignedFields = response.datas2;
+        _filteredAssignedFields = List.from(_allAssignedFields);
+        _isAssignedFieldLoading = false;
+      });
+    } catch (e) {
+      debugPrint('Assigned Fields Error: $e');
+      if (!mounted) return;
+
+      setState(() {
+        _assignedFieldError = e.toString().replaceFirst('Exception: ', '');
+        _isAssignedFieldLoading = false;
+      });
+    }
+  }
+
+  void _filterAssignedFields() {
+    final query = _assignedFieldSearchController.text.trim().toLowerCase();
+
+    setState(() {
+      if (query.isEmpty) {
+        _filteredAssignedFields = List.from(_allAssignedFields);
+      } else {
+        _filteredAssignedFields = _allAssignedFields.where((field) {
+          final matchesDistrict = field.districtName.toLowerCase().contains(query);
+          final matchesState = field.stateName.toLowerCase().contains(query);
+          final matchesEmp = field.empName.toLowerCase().contains(query);
+          final matchesEmpId = field.empId.toLowerCase().contains(query);
+          final matchesStatus = field.status.toLowerCase().contains(query);
+          return matchesDistrict || matchesState || matchesEmp || matchesEmpId || matchesStatus;
+        }).toList();
+      }
+    });
   }
 
   void _loadInitialTeamData() {
@@ -262,6 +339,7 @@ class _YourTeamPageState extends State<YourTeamPage> {
     _filteredMembers = List.from(_allTeamMembers);
     _isLoading = false;
   }
+  
 
   void _filterTeamMembers() {
     final query = _searchController.text.trim().toLowerCase();
@@ -608,9 +686,9 @@ class _YourTeamPageState extends State<YourTeamPage> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'Your Team (MR List)',
+          _selectedViewTab == 0 ? 'Your Team (MR List)' : 'Assigned Field (Allotted Areas)',
           style: GoogleFonts.poppins(
-            fontSize: 18,
+            fontSize: 17,
             fontWeight: FontWeight.w700,
             color: AppColors.white,
           ),
@@ -619,65 +697,587 @@ class _YourTeamPageState extends State<YourTeamPage> {
           IconButton(
             icon: const Icon(Icons.refresh_rounded, color: AppColors.primaryGold),
             tooltip: 'Refresh',
-            onPressed: _loadInitialTeamData,
+            onPressed: () {
+              _loadInitialTeamData();
+              _loadAssignedFields();
+            },
           ),
         ],
       ),
       body: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
         slivers: [
-          // 1. Top KPI Summary Banner
+          // 0. Segmented Tab Switcher (Team MRs vs Assigned Field)
           SliverToBoxAdapter(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-              child: _buildTeamHeaderSummary(),
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+              child: _buildViewSegmentedSwitcher(),
             ),
           ),
 
-          // 2. State, District & Block Filter Form Card
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-              child: _buildFilterFormCard(),
-            ),
-          ),
-
-          // 3. Search Bar & Status Chips
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-              child: _buildSearchAndPills(),
-            ),
-          ),
-
-          // 4. Team Members List or Empty View
-          if (_isLoading)
-            const SliverFillRemaining(
-              child: Center(
-                child: CircularProgressIndicator(
-                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryGreen),
-                ),
-              ),
-            )
-          else if (_filteredMembers.isEmpty)
-            SliverFillRemaining(
-              hasScrollBody: false,
-              child: _buildEmptyState(),
-            )
-          else
-            SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 30),
-              sliver: SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final member = _filteredMembers[index];
-                    return _buildTeamMemberCard(member);
-                  },
-                  childCount: _filteredMembers.length,
-                ),
+          // ==================== TAB 0: TEAM MEMBERS ====================
+          if (_selectedViewTab == 0) ...[
+            // 1. Top KPI Summary Banner
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
+                child: _buildTeamHeaderSummary(),
               ),
             ),
+
+            // 2. State, District & Block Filter Form Card
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                child: _buildFilterFormCard(),
+              ),
+            ),
+
+            // 3. Search Bar & Status Chips
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                child: _buildSearchAndPills(),
+              ),
+            ),
+
+            // 4. Team Members List or Empty View
+            if (_isLoading)
+              const SliverFillRemaining(
+                child: Center(
+                  child: CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryGreen),
+                  ),
+                ),
+              )
+            else if (_filteredMembers.isEmpty)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: _buildEmptyState(),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 30),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final member = _filteredMembers[index];
+                      return _buildTeamMemberCard(member);
+                    },
+                    childCount: _filteredMembers.length,
+                  ),
+                ),
+              ),
+          ],
+
+          // ==================== TAB 1: ASSIGNED FIELD ====================
+          if (_selectedViewTab == 1) ...[
+            // 1. Assigned Field KPI Header
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 6, 16, 12),
+                child: _buildAssignedFieldHeaderSummary(),
+              ),
+            ),
+
+            // 2. Assigned Field Search Bar
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                child: _buildAssignedFieldSearch(),
+              ),
+            ),
+
+            // 3. Assigned Field List / Loader / Error / Empty
+            if (_isAssignedFieldLoading)
+              const SliverFillRemaining(
+                child: Center(
+                  child: CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryGreen),
+                  ),
+                ),
+              )
+            else if (_assignedFieldError != null)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: _buildAssignedFieldErrorState(),
+              )
+            else if (_filteredAssignedFields.isEmpty)
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: _buildAssignedFieldEmptyState(),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 30),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final field = _filteredAssignedFields[index];
+                      return _buildAssignedFieldCard(field);
+                    },
+                    childCount: _filteredAssignedFields.length,
+                  ),
+                ),
+              ),
+          ],
         ],
+      ),
+    );
+  }
+
+  // ============================================================
+  // SEGMENTED SWITCHER (TEAM MRS vs ASSIGNED FIELD)
+  // ============================================================
+  Widget _buildViewSegmentedSwitcher() {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.primaryGold.withValues(alpha: 0.35)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryGreen.withValues(alpha: 0.06),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          _buildSegmentItem(
+            index: 0,
+            title: 'Team MRs',
+            badge: '${_allTeamMembers.length}',
+            icon: Icons.groups_rounded,
+          ),
+          _buildSegmentItem(
+            index: 1,
+            title: 'Assigned Field',
+            badge: '${_allAssignedFields.length}',
+            icon: Icons.location_on_rounded,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSegmentItem({
+    required int index,
+    required String title,
+    required String badge,
+    required IconData icon,
+  }) {
+    final isSelected = _selectedViewTab == index;
+
+    return Expanded(
+      child: InkWell(
+        onTap: () {
+          setState(() {
+            _selectedViewTab = index;
+          });
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 9, horizontal: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? AppColors.primaryGreen : Colors.transparent,
+            borderRadius: BorderRadius.circular(12),
+            gradient: isSelected
+                ? const LinearGradient(
+                    colors: [AppColors.darkGreen, AppColors.primaryGreen],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
+                : null,
+            boxShadow: isSelected
+                ? [
+                    BoxShadow(
+                      color: AppColors.primaryGreen.withValues(alpha: 0.25),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                icon,
+                size: 16,
+                color: isSelected ? AppColors.primaryGold : AppColors.textSecondary,
+              ),
+              const SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.poppins(
+                    fontSize: 12.5,
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                    color: isSelected ? AppColors.white : AppColors.textDark,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? AppColors.primaryGold
+                      : AppColors.primaryGreen.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  badge,
+                  style: GoogleFonts.poppins(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: isSelected ? AppColors.darkGreen : AppColors.primaryGreen,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ============================================================
+  // ASSIGNED FIELD WIDGETS (Live from ApiService.getASM)
+  // ============================================================
+  Widget _buildAssignedFieldHeaderSummary() {
+    final totalDistricts = _allAssignedFields.length;
+    final statesCovered = _allAssignedFields.map((f) => f.stateName).where((s) => s.isNotEmpty).toSet().length;
+    final activeCount = _allAssignedFields.where((f) => f.status.toUpperCase() == 'ACTIVE').length;
+    final empName = _allAssignedFields.isNotEmpty
+        ? _allAssignedFields.first.empName
+        : (widget.userData?.name ?? 'ASM Manager');
+    final empId = _allAssignedFields.isNotEmpty
+        ? _allAssignedFields.first.empId
+        : (widget.userData?.empId ?? 'N/A');
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [AppColors.darkGreen, AppColors.primaryGreen],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppColors.primaryGold.withValues(alpha: 0.35), width: 1.2),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryGreen.withValues(alpha: 0.25),
+            blurRadius: 14,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Assigned Field / Allotted Territory',
+                      style: GoogleFonts.poppins(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.white,
+                      ),
+                    ),
+                    Text(
+                      '$empName (ID: $empId)',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.lightGold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: AppColors.white.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.primaryGold.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.location_on_rounded, size: 14, color: AppColors.primaryGold),
+                    const SizedBox(width: 4),
+                    Text(
+                      '$totalDistricts Areas',
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.white,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          const Divider(height: 1, color: Colors.white24),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              _buildMetricItem('Districts Allotted', '$totalDistricts', Icons.location_city_outlined),
+              _buildDivider(),
+              _buildMetricItem('States Covered', '$statesCovered', Icons.public_outlined, color: AppColors.primaryGold),
+              _buildDivider(),
+              _buildMetricItem('Active Status', '$activeCount', Icons.verified_outlined, color: AppColors.leafGreen),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAssignedFieldSearch() {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.primaryGold.withValues(alpha: 0.3)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryGreen.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: TextField(
+        controller: _assignedFieldSearchController,
+        style: GoogleFonts.poppins(fontSize: 13, color: AppColors.textDark),
+        decoration: InputDecoration(
+          hintText: 'Search by District, State, Emp ID...',
+          hintStyle: GoogleFonts.poppins(fontSize: 12, color: Colors.grey[500]),
+          prefixIcon: const Icon(Icons.search_rounded, color: AppColors.primaryGreen, size: 20),
+          suffixIcon: _assignedFieldSearchController.text.isNotEmpty
+              ? IconButton(
+                  icon: const Icon(Icons.clear, size: 16),
+                  onPressed: () => _assignedFieldSearchController.clear(),
+                )
+              : null,
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAssignedFieldCard(AmrAssineField field) {
+    final bool isActive = field.status.trim().toUpperCase() == 'ACTIVE';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.primaryGold.withValues(alpha: 0.25)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryGreen.withValues(alpha: 0.06),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryGreen.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppColors.primaryGold.withValues(alpha: 0.3)),
+                  ),
+                  child: const Icon(Icons.location_city_rounded, color: AppColors.primaryGreen, size: 22),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        field.districtName.isNotEmpty ? field.districtName : 'Assigned District',
+                        style: GoogleFonts.poppins(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textDark,
+                        ),
+                      ),
+                      Row(
+                        children: [
+                          const Icon(Icons.public, size: 12, color: AppColors.primaryGreen),
+                          const SizedBox(width: 4),
+                          Text(
+                            field.stateName.isNotEmpty ? field.stateName : 'State',
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: isActive ? AppColors.leafGreen.withValues(alpha: 0.12) : Colors.amber.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: isActive ? AppColors.leafGreen.withValues(alpha: 0.4) : Colors.amber.withValues(alpha: 0.4),
+                    ),
+                  ),
+                  child: Text(
+                    field.status.isNotEmpty ? field.status : 'Active',
+                    style: GoogleFonts.poppins(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      color: isActive ? AppColors.secondaryGreen : Colors.amber[800],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            const Divider(height: 1),
+            const SizedBox(height: 10),
+
+            // Field Metadata Chips (EmpName, EmpId, Date)
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                if (field.empName.isNotEmpty)
+                  _buildInfoChip(Icons.person_outline, field.empName),
+                if (field.empId.isNotEmpty)
+                  _buildInfoChip(Icons.fingerprint_rounded, 'ID: ${field.empId}', isPrimary: true),
+                if (field.createDate.isNotEmpty)
+                  _buildInfoChip(Icons.calendar_today_outlined, field.createDate),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAssignedFieldEmptyState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: AppColors.primaryGreen.withValues(alpha: 0.08),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.location_off_outlined, size: 50, color: AppColors.primaryGreen),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No Assigned Fields Found',
+              style: GoogleFonts.poppins(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textDark,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _assignedFieldSearchController.text.isNotEmpty
+                  ? 'No allotted areas match "${_assignedFieldSearchController.text}".'
+                  : 'No territory fields are currently allotted for this ASM account.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(fontSize: 12, color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: _loadAssignedFields,
+              icon: const Icon(Icons.refresh, size: 16),
+              label: Text('Refresh Fields', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryGreen,
+                foregroundColor: AppColors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAssignedFieldErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline_rounded, size: 50, color: AppColors.error),
+            const SizedBox(height: 14),
+            Text(
+              'Unable to Load Assigned Fields',
+              style: GoogleFonts.poppins(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textDark,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _assignedFieldError ?? 'Unknown error occurred.',
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(fontSize: 12, color: AppColors.error),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              onPressed: _loadAssignedFields,
+              icon: const Icon(Icons.refresh, size: 16),
+              label: Text('Try Again', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryGreen,
+                foregroundColor: AppColors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

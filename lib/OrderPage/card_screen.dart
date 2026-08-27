@@ -603,6 +603,9 @@ class _CartScreenState extends State<CartScreen> {
                       MaterialPageRoute(
                         builder: (context) => CheckoutScreen(
                           userId: _effectiveUserId,
+                          cartItems: apiCartItems,
+                          subtotal: totalPrice,
+                          totalMrp: totalMrp,
                         ),
                       ),
                     ).then((_) => _fetchCartData());

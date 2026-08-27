@@ -12,6 +12,7 @@ import 'model/TodoModel.dart';
 import 'model/TodoModel1.dart';
 import 'service/api_serviceProfile.dart';
 import 'viewHome/widgets/home_drawer.dart';
+import 'viewHome/widgets/mr_work_report_page.dart';
 
 class EmployeeHomePage extends StatefulWidget {
   final TodoModel userData;
@@ -32,7 +33,7 @@ class _EmployeeHomePageState extends State<EmployeeHomePage> {
 
   void _preloadProfileData() {
     if (widget.userData.mobile != null) {
-      ApiService.fetchProfile(widget.userData.mobile!).catchError((_) {});
+      ApiService.fetchProfile(widget.userData.mobile!).catchError((_) => null);
     }
   }
 
@@ -40,10 +41,10 @@ class _EmployeeHomePageState extends State<EmployeeHomePage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: AppColors.white.withOpacity(0.15),
+        color: AppColors.white.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: AppColors.primaryGold.withOpacity(0.3),
+          color: AppColors.primaryGold.withValues(alpha: 0.3),
           width: 1,
         ),
       ),
@@ -106,7 +107,15 @@ class _EmployeeHomePageState extends State<EmployeeHomePage> {
           case "Doctor":
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => DoctorPagefst()),
+              MaterialPageRoute(builder: (context) => DoctorReportPage()),
+            );
+            break;
+          case "Work Report":
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => MrWorkReportPage(userData: widget.userData),
+              ),
             );
             break;
         }
@@ -116,12 +125,12 @@ class _EmployeeHomePageState extends State<EmployeeHomePage> {
           color: AppColors.white,
           borderRadius: BorderRadius.circular(18),
           border: Border.all(
-            color: AppColors.lightGold.withOpacity(0.4),
+            color: AppColors.lightGold.withValues(alpha: 0.4),
             width: 1,
           ),
           boxShadow: [
             BoxShadow(
-              color: AppColors.primaryGreen.withOpacity(0.08),
+              color: AppColors.primaryGreen.withValues(alpha: 0.08),
               blurRadius: 12,
               offset: const Offset(0, 4),
             ),
@@ -134,7 +143,7 @@ class _EmployeeHomePageState extends State<EmployeeHomePage> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: AppColors.primaryGreen.withOpacity(0.08),
+                  color: AppColors.primaryGreen.withValues(alpha: 0.08),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(icon, color: AppColors.primaryGreen, size: 32),
@@ -187,12 +196,12 @@ class _EmployeeHomePageState extends State<EmployeeHomePage> {
                   ),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: AppColors.primaryGold.withOpacity(0.35),
+                    color: AppColors.primaryGold.withValues(alpha: 0.35),
                     width: 1.2,
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: AppColors.primaryGreen.withOpacity(0.3),
+                      color: AppColors.primaryGreen.withValues(alpha: 0.3),
                       spreadRadius: 1,
                       blurRadius: 12,
                       offset: const Offset(0, 6),
@@ -208,7 +217,7 @@ class _EmployeeHomePageState extends State<EmployeeHomePage> {
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: AppColors.white.withOpacity(0.12),
+                            color: AppColors.white.withValues(alpha: 0.12),
                             border: Border.all(
                               color: AppColors.primaryGold,
                               width: 1.5,
@@ -242,7 +251,7 @@ class _EmployeeHomePageState extends State<EmployeeHomePage> {
                               Text(
                                 widget.userData.employeeType ?? 'Staff Member',
                                 style: GoogleFonts.poppins(
-                                  color: AppColors.cream.withOpacity(0.85),
+                                  color: AppColors.cream.withValues(alpha: 0.85),
                                   fontSize: 13,
                                 ),
                               ),
@@ -252,7 +261,7 @@ class _EmployeeHomePageState extends State<EmployeeHomePage> {
                       ],
                     ),
                     const SizedBox(height: 12),
-                    Divider(color: AppColors.white.withOpacity(0.2)),
+                    Divider(color: AppColors.white.withValues(alpha: 0.2)),
                     const SizedBox(height: 10),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -279,6 +288,7 @@ class _EmployeeHomePageState extends State<EmployeeHomePage> {
                   _buildDashboardCard(Icons.shopping_cart, "Order", context),
                   _buildDashboardCard(Icons.account_balance_wallet, "Payment In", context),
                   _buildDashboardCard(Icons.medical_information, "Doctor", context),
+                  _buildDashboardCard(Icons.assignment_turned_in_rounded, "Work Report", context),
                 ],
               ),
             ],

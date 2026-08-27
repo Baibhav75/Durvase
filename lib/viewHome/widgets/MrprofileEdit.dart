@@ -50,6 +50,7 @@ class _MrProfileEditSheetState extends State<MrProfileEditSheet> {
   @override
   void initState() {
     super.initState();
+    _securityController.loadSecuritySettings();
     final data = widget.employeeData;
     _nameController = TextEditingController(text: data.name ?? '');
     _mobileController = TextEditingController(text: data.mobile ?? '');
@@ -638,7 +639,10 @@ class _MrProfileEditSheetState extends State<MrProfileEditSheet> {
                   value: isFpEnabled,
                   activeThumbColor: AppColors.white,
                   activeTrackColor: AppColors.primaryGreen,
-                  onChanged: (val) => _securityController.toggleFingerprint(val, context: context),
+                  onChanged: (val) async {
+                    await _securityController.toggleFingerprint(val, context: context);
+                    if (mounted) setState(() {});
+                  },
                 ),
 
                 Divider(height: 1, color: Colors.grey[200]),
@@ -692,7 +696,10 @@ class _MrProfileEditSheetState extends State<MrProfileEditSheet> {
                   value: isPwdEnabled,
                   activeThumbColor: AppColors.white,
                   activeTrackColor: AppColors.primaryGreen,
-                  onChanged: (val) => _securityController.toggleAppPassword(val, context: context),
+                  onChanged: (val) async {
+                    await _securityController.toggleAppPassword(val, context: context);
+                    if (mounted) setState(() {});
+                  },
                 ),
               ],
             );

@@ -35,7 +35,7 @@ class AppSecurityService {
     try {
       final bool canCheck = await _localAuth.canCheckBiometrics;
       final bool isDeviceSupported = await _localAuth.isDeviceSupported();
-      return canCheck && isDeviceSupported;
+      return canCheck || isDeviceSupported;
     } catch (e) {
       debugPrint('Error checking biometric support: $e');
       return false;
@@ -45,9 +45,10 @@ class AppSecurityService {
   /// Check whether at least one biometric (e.g. fingerprint) is enrolled
   static Future<bool> isBiometricEnrolled() async {
     try {
+      final bool canCheck = await _localAuth.canCheckBiometrics;
       final List<BiometricType> availableBiometrics =
           await _localAuth.getAvailableBiometrics();
-      return availableBiometrics.isNotEmpty;
+      return canCheck || availableBiometrics.isNotEmpty;
     } catch (e) {
       debugPrint('Error checking available biometrics: $e');
       return false;
@@ -63,16 +64,7 @@ class AppSecurityService {
       if (!isSupported) {
         return BiometricAuthResult(
           status: BiometricStatus.notSupported,
-          message: 'Fingerprint authentication is not available on this device.',
-        );
-      }
-
-      final bool isEnrolled = await isBiometricEnrolled();
-      if (!isEnrolled) {
-        return BiometricAuthResult(
-          status: BiometricStatus.notEnrolled,
-          message:
-              'No fingerprint is configured on this device. Please set up fingerprint in device settings or use App Password.',
+          message: 'Fingerprint authentication is not supported on this device. Please use App Password.',
         );
       }
 
@@ -88,27 +80,44 @@ class AppSecurityService {
       } else {
         return BiometricAuthResult(
           status: BiometricStatus.failed,
-          message: 'Fingerprint authentication failed.',
+          message: 'Fingerprint authentication was not completed.',
         );
       }
     } on PlatformException catch (e) {
       debugPrint('Biometric PlatformException: code=${e.code}, msg=${e.message}');
-      if (e.code == 'NotAvailable' || e.code == 'PasscodeNotSet') {
+      if (e.code == 'NotAvailable' || e.code == 'PasscodeNotSet' || e.code == 'NotEnrolled') {
         return BiometricAuthResult(
           status: BiometricStatus.notEnrolled,
           message:
-              'No fingerprint is configured on this device. Please set up fingerprint in device settings or use App Password.',
+              'No fingerprint is registered in device Settings. Please register a fingerprint in Android Settings, or use App Password.',
+        );
+      } else if (e.code == 'LockedOut') {
+        return BiometricAuthResult(
+          status: BiometricStatus.lockedOut,
+          message:
+              'Too many failed attempts. Biometric unlock is temporarily locked. Please use App Password or try again later.',
+        );
+      } else if (e.code == 'PermanentlyLockedOut') {
+        return BiometricAuthResult(
+          status: BiometricStatus.permanentlyLockedOut,
+          message:
+              'Biometric unlock is locked due to multiple failed attempts. Please unlock with your App Password.',
+        );
+      } else if (e.code == 'UserCanceled' || e.code == 'AuthCancelled') {
+        return BiometricAuthResult(
+          status: BiometricStatus.cancelled,
+          message: 'Fingerprint authentication was cancelled.',
         );
       }
       return BiometricAuthResult(
-        status: BiometricStatus.cancelled,
-        message: 'Fingerprint authentication cancelled.',
+        status: BiometricStatus.error,
+        message: e.message ?? 'Authentication error occurred.',
       );
     } catch (e) {
       debugPrint('Biometric Error: $e');
       return BiometricAuthResult(
         status: BiometricStatus.error,
-        message: 'Authentication error occurred.',
+        message: 'Authentication error: $e',
       );
     }
   }
@@ -203,6 +212,8 @@ enum BiometricStatus {
   success,
   failed,
   cancelled,
+  lockedOut,
+  permanentlyLockedOut,
   notSupported,
   notEnrolled,
   error,

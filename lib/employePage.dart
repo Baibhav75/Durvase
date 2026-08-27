@@ -6,6 +6,7 @@ import 'AsmAdministister/asmHomePage.dart';
 import 'employeehomepage.dart';
 import 'model/TodoModel.dart';
 import 'service/api_service.dart';
+import 'service/app_security_service.dart';
 import 'service/session_manager.dart';
 
 enum LoginRole { none, employee, ams }
@@ -20,6 +21,10 @@ class EmployeeLoginPage extends StatefulWidget {
 class _EmployeeLoginPageState extends State<EmployeeLoginPage> {
   // Current active role (none = role selection, employee = employee login, ams = ams login)
   LoginRole _selectedRole = LoginRole.none;
+
+  // Biometric State
+  bool _isFingerprintEnabled = false;
+  bool _isBiometricAuthenticating = false;
 
   // Employee Login Controllers & State
   final TextEditingController _mobileController = TextEditingController();
@@ -39,6 +44,80 @@ class _EmployeeLoginPageState extends State<EmployeeLoginPage> {
   void initState() {
     super.initState();
     _loadSavedCredentials();
+    _checkFingerprintStatus();
+  }
+
+  Future<void> _checkFingerprintStatus() async {
+    try {
+      final enabled = await AppSecurityService.isFingerprintEnabled();
+      if (mounted) {
+        setState(() {
+          _isFingerprintEnabled = enabled;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error checking fingerprint status on login: $e');
+    }
+  }
+
+  Future<void> _loginWithFingerprint() async {
+    if (_isBiometricAuthenticating) return;
+
+    setState(() => _isBiometricAuthenticating = true);
+
+    try {
+      final result = await AppSecurityService.authenticateWithBiometrics(
+        localizedReason: 'Scan fingerprint to log in to Durvasa Ayurved',
+      );
+
+      if (!mounted) return;
+
+      if (result.isSuccess) {
+        // Validate existing session
+        final bool isLoggedIn = await SessionManager.isLoggedIn();
+        final TodoModel? sessionData = await SessionManager.getLoginData();
+
+        if (isLoggedIn && sessionData != null) {
+          final bool isAsm = sessionData.employeeType?.toLowerCase().contains('asm') == true ||
+              sessionData.employeeType?.toLowerCase().contains('ams') == true;
+
+          if (isAsm) {
+            _navigateToAsmHomePage(sessionData);
+          } else {
+            _navigateToHomePage(sessionData);
+          }
+        } else {
+          // Session expired or absent
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text(
+                'No active session found. Please enter your mobile number and password to log in.',
+              ),
+              backgroundColor: AppColors.darkGreen,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result.message),
+            backgroundColor: Colors.red.shade700,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Biometric login error: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isBiometricAuthenticating = false);
+      }
+    }
   }
 
   Future<void> _loadSavedCredentials() async {
@@ -324,7 +403,6 @@ class _EmployeeLoginPageState extends State<EmployeeLoginPage> {
       ),
     );
   }
-
   // ==========================================
   // 1. ROLE SELECTION VIEW (AMS & Employee Cards)
   // ==========================================
@@ -360,7 +438,32 @@ class _EmployeeLoginPageState extends State<EmployeeLoginPage> {
                   ),
                 ),
               ),
-              const SizedBox(height: 36),
+              const SizedBox(height: 30),
+
+              // Quick Fingerprint Login (Only when enabled)
+              if (_isFingerprintEnabled) ...[
+                _buildFingerprintLoginCard(),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(child: Divider(color: Colors.grey[300])),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Text(
+                        "OR LOGIN WITH CREDENTIALS",
+                        style: GoogleFonts.poppins(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textSecondary,
+                          letterSpacing: 0.8,
+                        ),
+                      ),
+                    ),
+                    Expanded(child: Divider(color: Colors.grey[300])),
+                  ],
+                ),
+                const SizedBox(height: 20),
+              ],
 
               // AMS Role Card
               _buildRoleCard(
@@ -407,6 +510,126 @@ class _EmployeeLoginPageState extends State<EmployeeLoginPage> {
                 ),
               ),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Helper Widget for Selectable Role Cards
+  Widget _buildFingerprintLoginCard() {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        gradient: const LinearGradient(
+          colors: [AppColors.primaryGreen, AppColors.darkGreen],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryGreen.withOpacity(0.32),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: _isBiometricAuthenticating ? null : _loginWithFingerprint,
+          borderRadius: BorderRadius.circular(22),
+          splashColor: AppColors.lightGold.withOpacity(0.2),
+          child: Padding(
+            padding: const EdgeInsets.all(20.0),
+            child: Row(
+              children: [
+                Container(
+                  width: 56,
+                  height: 56,
+                  decoration: BoxDecoration(
+                    color: AppColors.white.withOpacity(0.16),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: AppColors.primaryGold.withOpacity(0.7),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: _isBiometricAuthenticating
+                      ? const Center(
+                          child: SizedBox(
+                            width: 22,
+                            height: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          ),
+                        )
+                      : const Icon(Icons.fingerprint_rounded, color: AppColors.white, size: 32),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            "Login with Fingerprint",
+                            style: GoogleFonts.poppins(
+                              color: Colors.white,
+                              fontSize: 16.5,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryGold.withOpacity(0.25),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: AppColors.primaryGold, width: 0.8),
+                            ),
+                            child: Text(
+                              "FAST",
+                              style: GoogleFonts.poppins(
+                                color: AppColors.lightGold,
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        "Touch fingerprint sensor to enter your account",
+                        style: GoogleFonts.poppins(
+                          color: Colors.white.withOpacity(0.85),
+                          fontSize: 11.5,
+                          height: 1.3,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Container(
+                  width: 32,
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: AppColors.white.withOpacity(0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    color: AppColors.lightGold,
+                    size: 14,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -744,6 +967,37 @@ class _EmployeeLoginPageState extends State<EmployeeLoginPage> {
                         ),
                 ),
 
+                // Fingerprint Login Option (Only when enabled)
+                if (_isFingerprintEnabled) ...[
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 54,
+                    child: OutlinedButton.icon(
+                      onPressed: _isBiometricAuthenticating ? null : _loginWithFingerprint,
+                      icon: _isBiometricAuthenticating
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primaryGreen),
+                            )
+                          : const Icon(Icons.fingerprint_rounded, size: 22, color: AppColors.primaryGreen),
+                      label: Text(
+                        "Login with Fingerprint",
+                        style: GoogleFonts.poppins(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primaryGreen,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: AppColors.primaryGreen, width: 1.5),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                      ),
+                    ),
+                  ),
+                ],
+
                 const Spacer(),
 
                 // Footer Text
@@ -971,6 +1225,37 @@ class _EmployeeLoginPageState extends State<EmployeeLoginPage> {
                           ),
                         ),
                 ),
+
+                // Fingerprint Login Option (Only when enabled)
+                if (_isFingerprintEnabled) ...[
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 54,
+                    child: OutlinedButton.icon(
+                      onPressed: _isBiometricAuthenticating ? null : _loginWithFingerprint,
+                      icon: _isBiometricAuthenticating
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.deepGold),
+                            )
+                          : const Icon(Icons.fingerprint_rounded, size: 22, color: AppColors.deepGold),
+                      label: Text(
+                        "Login with Fingerprint",
+                        style: GoogleFonts.poppins(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.deepGold,
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: AppColors.deepGold, width: 1.5),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                      ),
+                    ),
+                  ),
+                ],
 
                 const Spacer(),
 

@@ -113,6 +113,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.3.5"
+  change_app_package_name:
+    dependency: "direct main"
+    description:
+      name: change_app_package_name
+      sha256: "8e43b754fe960426904d77ed4c62fa8c9834deaf6e293ae40963fa447482c4c5"
+      url: "https://pub.dev"
+    source: hosted
+    version: "1.5.0"
   characters:
     dependency: transitive
     description:
@@ -480,6 +488,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "6.3.2"
+  google_generative_ai:
+    dependency: "direct main"
+    description:
+      name: google_generative_ai
+      sha256: "71f613d0247968992ad87a0eb21650a566869757442ba55a31a81be6746e0d1f"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.4.7"
   gsettings:
     dependency: transitive
     description:
@@ -680,6 +696,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "2.0.1"
+  lottie:
+    dependency: "direct main"
+    description:
+      name: lottie
+      sha256: "8b6359a7422167014aa73ce763fa133fb832065dcc0ac4d1dec1f603a5cef7d0"
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.3.3"
   matcher:
     dependency: transitive
     description:

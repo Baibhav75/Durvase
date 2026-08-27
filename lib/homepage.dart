@@ -1,8 +1,15 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'DealerAdministister/dealer_login_screen.dart';
+import 'RetailerAdministister/retailer_login_page.dart';
 import 'constants/app_colors.dart';
+import 'AsmAdministister/asmHomePage.dart';
 import 'employePage.dart';
+import 'employeehomepage.dart';
+import 'model/TodoModel.dart';
+import 'service/app_security_service.dart';
+import 'service/session_manager.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -16,9 +23,13 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
 
+  bool _isFingerprintEnabled = false;
+  bool _isBiometricAuthenticating = false;
+
   @override
   void initState() {
     super.initState();
+    _checkFingerprintStatus();
     _animController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
@@ -41,6 +52,95 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   void dispose() {
     _animController.dispose();
     super.dispose();
+  }
+
+  Future<void> _checkFingerprintStatus() async {
+    try {
+      final enabled = await AppSecurityService.isFingerprintEnabled();
+      if (mounted) {
+        setState(() {
+          _isFingerprintEnabled = enabled;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error checking fingerprint status in HomePage: $e');
+    }
+  }
+
+  Future<void> _loginWithFingerprint() async {
+    if (_isBiometricAuthenticating) return;
+
+    setState(() => _isBiometricAuthenticating = true);
+
+    try {
+      final result = await AppSecurityService.authenticateWithBiometrics(
+        localizedReason: 'Scan fingerprint to log in to Durvasa Ayurved',
+      );
+
+      if (!mounted) return;
+
+      if (result.isSuccess) {
+        // Validate existing session
+        final bool isLoggedIn = await SessionManager.isLoggedIn();
+        final TodoModel? sessionData = await SessionManager.getLoginData();
+
+        if (isLoggedIn && sessionData != null) {
+          final bool isAsm = sessionData.employeeType?.toLowerCase().contains('asm') == true ||
+              sessionData.employeeType?.toLowerCase().contains('ams') == true;
+
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(
+              builder: (context) => isAsm
+                  ? AsmhomepageHomePage(
+                      userData: sessionData,
+                      userId: sessionData.empId?.toString() ??
+                          sessionData.asmId?.toString() ??
+                          '',
+                    )
+                  : EmployeeHomePage(
+                      userData: sessionData,
+                      userId: sessionData.empId?.toString() ?? '',
+                    ),
+            ),
+            (route) => false,
+          );
+        } else {
+          // No active session found -> navigate to login screen
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text(
+                'No active session found. Please select Employee & ASM Portal to sign in with password.',
+              ),
+              backgroundColor: AppColors.darkGreen,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              duration: const Duration(seconds: 4),
+            ),
+          );
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const EmployeeLoginPage()),
+          );
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result.message),
+            backgroundColor: Colors.red.shade700,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Biometric login error: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isBiometricAuthenticating = false);
+      }
+    }
   }
 
   void _showComingSoonDialog({
@@ -211,6 +311,12 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
 
                       const SizedBox(height: 28),
 
+                      // Quick Biometric Unlock (Only when enabled)
+                      if (_isFingerprintEnabled) ...[
+                        _buildQuickFingerprintCard(),
+                        const SizedBox(height: 24),
+                      ],
+
                       // 6. Section Divider Header
                       _buildSectionHeader('SELECT ACCESS PORTAL'),
 
@@ -250,11 +356,11 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                           Color(0xFF26735E),
                         ],
                         onTap: () {
-                          _showComingSoonDialog(
-                            title: 'Authorized Dealer Portal',
-                            description:
-                                'The B2B Dealer & Distributor portal is currently undergoing scheduled maintenance. Please contact your regional Area Sales Manager for manual order booking.',
-                            icon: Icons.storefront_rounded,
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const DealerLoginPage(),
+                            ),
                           );
                         },
                       ),
@@ -272,11 +378,11 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                           Color(0xFF3B6E52),
                         ],
                         onTap: () {
-                          _showComingSoonDialog(
-                            title: 'Retailer Network',
-                            description:
-                                'Retail partner login will be available in the upcoming release. For urgent product restocking, please contact our helpline or your assigned ASM.',
-                            icon: Icons.shopping_bag_rounded,
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const RetailerLoginScreen(),
+                            ),
                           );
                         },
                       ),
@@ -613,6 +719,151 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
           ),
         ),
       ],
+    );
+  }
+
+  // ============================================================
+  // QUICK BIOMETRIC UNLOCK CARD
+  // ============================================================
+  Widget _buildQuickFingerprintCard() {
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: const LinearGradient(
+          colors: [
+            Color(0xFF0D4B2E), // Deep Forest Green
+            Color(0xFF186842), // Rich Emerald
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        border: Border.all(
+          color: AppColors.primaryGold.withValues(alpha: 0.65),
+          width: 1.5,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryGreen.withValues(alpha: 0.35),
+            blurRadius: 22,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: _isBiometricAuthenticating ? null : _loginWithFingerprint,
+          borderRadius: BorderRadius.circular(24),
+          splashColor: AppColors.lightGold.withValues(alpha: 0.2),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+            child: Row(
+              children: [
+                // Glowing Fingerprint Avatar
+                Container(
+                  height: 58,
+                  width: 58,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppColors.white.withValues(alpha: 0.16),
+                    border: Border.all(
+                      color: AppColors.primaryGold,
+                      width: 1.8,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.2),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
+                  ),
+                  child: _isBiometricAuthenticating
+                      ? const Center(
+                          child: SizedBox(
+                            width: 24,
+                            height: 24,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                            ),
+                          ),
+                        )
+                      : const Icon(
+                          Icons.fingerprint_rounded,
+                          color: Colors.white,
+                          size: 34,
+                        ),
+                ),
+                const SizedBox(width: 16),
+
+                // Text Content
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            'Login with Fingerprint',
+                            style: GoogleFonts.poppins(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryGold.withValues(alpha: 0.25),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: AppColors.primaryGold, width: 0.8),
+                            ),
+                            child: Text(
+                              'FAST',
+                              style: GoogleFonts.poppins(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.lightGold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        'Touch sensor for quick biometric access',
+                        style: GoogleFonts.poppins(
+                          fontSize: 11.5,
+                          color: Colors.white.withValues(alpha: 0.85),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(width: 8),
+
+                // Action Icon
+                Container(
+                  height: 34,
+                  width: 34,
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryGold,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.arrow_forward_rounded,
+                    size: 18,
+                    color: AppColors.darkGreen,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 

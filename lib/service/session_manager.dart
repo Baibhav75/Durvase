@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../model/TodoModel.dart';
 import '../model/TodoModel1.dart';
+import '../model/asm_profile_model.dart';
 import 'api_serviceProfile.dart';
 
 class SessionManager {
@@ -15,6 +16,7 @@ class SessionManager {
   static const String _emailKey = 'email';
   static const String _mobileKey = 'mobile';
   static const String _employeeTypeKey = 'employee_type';
+  static const String _retailerIdKey = 'retailer_id';
 
   // Saved credentials keys (for auto-fill / remember login)
   static const String _savedMobileKey = 'saved_login_mobile';
@@ -276,6 +278,54 @@ class SessionManager {
     }
   }
 
+  /// Synchronize ASM profile details (empId, uniqueId, asmId, etc.) into database / preferences
+  static Future<void> saveAsmProfile(AsmProfileModel profile) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      final empId = profile.empId ?? profile.uniqueId ?? profile.employeeCode ?? '';
+      final asmId = profile.asmId?.toString() ?? '';
+      final name = profile.name ?? '';
+      final email = profile.email ?? '';
+      final mobile = profile.mobile ?? '';
+      final employeeType = profile.employeeType ?? 'ASM';
+
+      if (empId.isNotEmpty) {
+        await prefs.setString(_empIdKey, empId);
+        await prefs.setString(_userIdKey, empId);
+        await prefs.setString(_legacyUserIdKey, empId);
+      }
+      if (asmId.isNotEmpty) {
+        await prefs.setString('asm_id', asmId);
+      }
+      if (name.isNotEmpty) {
+        await prefs.setString(_nameKey, name);
+      }
+      if (email.isNotEmpty) {
+        await prefs.setString(_emailKey, email);
+      }
+      if (mobile.isNotEmpty) {
+        await prefs.setString(_mobileKey, mobile);
+      }
+      await prefs.setString(_employeeTypeKey, employeeType);
+
+      // Also synchronize cached TodoModel JSON
+      final currentData = await getLoginData();
+      if (currentData != null) {
+        if (empId.isNotEmpty) currentData.empId = empId;
+        if (asmId.isNotEmpty) currentData.asmId = asmId;
+        if (name.isNotEmpty) currentData.name = name;
+        if (email.isNotEmpty) currentData.email = email;
+        if (mobile.isNotEmpty) currentData.mobile = mobile;
+        currentData.employeeType = employeeType;
+        await prefs.setString(_prefsKey, jsonEncode(currentData.toJson()));
+      }
+      debugPrint('✅ Synced ASM Profile in SessionManager: empId=$empId, asmId=$asmId');
+    } catch (e) {
+      debugPrint('Error saving ASM profile in SessionManager: $e');
+    }
+  }
+
   // --- Convenience Getters ---
   static Future<String?> getUserId() async {
     final prefs = await SharedPreferences.getInstance();
@@ -309,5 +359,42 @@ class SessionManager {
   static Future<String?> getEmployeeType() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_employeeTypeKey);
+  }
+
+  // --- Retailer ID Helpers ---
+
+  /// Save Retailer ID to SharedPreferences
+  static Future<bool> saveRetailerId(String retailerId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final success = await prefs.setString(_retailerIdKey, retailerId);
+      debugPrint('✅ Retailer ID saved in SessionManager: $retailerId');
+      return success;
+    } catch (e) {
+      debugPrint('❌ Error saving retailer ID in SessionManager: $e');
+      return false;
+    }
+  }
+
+  /// Retrieve stored Retailer ID from SharedPreferences
+  static Future<String?> getRetailerId() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getString(_retailerIdKey);
+    } catch (e) {
+      debugPrint('❌ Error retrieving retailer ID from SessionManager: $e');
+      return null;
+    }
+  }
+
+  /// Remove stored Retailer ID from SharedPreferences
+  static Future<bool> clearRetailerId() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return await prefs.remove(_retailerIdKey);
+    } catch (e) {
+      debugPrint('❌ Error clearing retailer ID: $e');
+      return false;
+    }
   }
 }

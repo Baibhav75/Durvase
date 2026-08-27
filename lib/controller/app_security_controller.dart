@@ -47,35 +47,13 @@ class AppSecurityController extends GetxController {
       await AppSecurityService.setFingerprintEnabled(false);
       isFingerprintEnabled.value = false;
       fingerprintEnabledDate.value = '';
+      if (context.mounted) {
+        _showSnackBar(context, message: 'Fingerprint unlock disabled', isError: false);
+      }
       return true;
     }
 
-    // Checking hardware availability
-    final supported = await AppSecurityService.isBiometricSupported();
-    if (!supported) {
-      isBiometricSupported.value = false;
-      _showSnackBar(
-        context,
-        message:
-            'Fingerprint authentication is not available on this device. You can use App Password instead.',
-        isError: true,
-      );
-      return false;
-    }
-
-    final enrolled = await AppSecurityService.isBiometricEnrolled();
-    if (!enrolled) {
-      isBiometricEnrolled.value = false;
-      _showSnackBar(
-        context,
-        message:
-            'No fingerprint is configured on this device. Please set up fingerprint in device settings or use App Password.',
-        isError: true,
-      );
-      return false;
-    }
-
-    // Challenge user with native fingerprint verification prompt
+    // Challenge user with native biometric verification prompt
     final result = await AppSecurityService.authenticateWithBiometrics(
       localizedReason: 'Scan fingerprint to enable biometric app unlock',
     );
@@ -89,7 +67,7 @@ class AppSecurityController extends GetxController {
       if (context.mounted) {
         _showSnackBar(
           context,
-          message: 'Fingerprint enabled successfully',
+          message: 'Fingerprint unlock enabled successfully',
           isError: false,
         );
       }
@@ -109,37 +87,53 @@ class AppSecurityController extends GetxController {
 
   /// Toggle App Password option (Testing Mode: 1234)
   Future<bool> toggleAppPassword(bool enable, {required BuildContext context}) async {
-    if (!enable) {
-      await AppSecurityService.setAppPasswordEnabled(false);
-      isAppPasswordEnabled.value = false;
-      appPasswordEnabledDate.value = '';
+    try {
+      if (!enable) {
+        await AppSecurityService.setAppPasswordEnabled(false);
+        isAppPasswordEnabled.value = false;
+        appPasswordEnabledDate.value = '';
+        if (context.mounted) {
+          _showSnackBar(context, message: 'App Password unlock disabled', isError: false);
+        }
+        return true;
+      }
+
+      await AppSecurityService.setAppPasswordEnabled(true);
+      isAppPasswordEnabled.value = true;
+      final pwdDate = await AppSecurityService.getAppPasswordEnabledDate();
+      appPasswordEnabledDate.value = AppSecurityService.formatEnabledDate(pwdDate);
+
+      if (context.mounted) {
+        _showSnackBar(
+          context,
+          message: 'App Password enabled successfully (Test password: ${AppSecurityService.testAppPassword})',
+          isError: false,
+        );
+      }
       return true;
+    } catch (e) {
+      debugPrint('Error toggling app password: $e');
+      return false;
     }
-
-    await AppSecurityService.setAppPasswordEnabled(true);
-    isAppPasswordEnabled.value = true;
-    final pwdDate = await AppSecurityService.getAppPasswordEnabledDate();
-    appPasswordEnabledDate.value = AppSecurityService.formatEnabledDate(pwdDate);
-
-    if (context.mounted) {
-      _showSnackBar(
-        context,
-        message: 'App Password enabled (Test password: ${AppSecurityService.testAppPassword})',
-        isError: false,
-      );
-    }
-    return true;
   }
 
   void _showSnackBar(BuildContext context, {required String message, required bool isError}) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: isError ? Colors.red.shade700 : const Color(0xFF0D4B2E),
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        duration: const Duration(seconds: 3),
-      ),
-    );
+    try {
+      final messenger = ScaffoldMessenger.maybeOf(context);
+      if (messenger != null) {
+        messenger.clearSnackBars();
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: isError ? Colors.red.shade700 : const Color(0xFF0D4B2E),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error showing snackbar: $e');
+    }
   }
 }

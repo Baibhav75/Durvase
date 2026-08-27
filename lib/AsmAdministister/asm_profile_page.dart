@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
-
 import '../constants/app_colors.dart';
 import '../model/TodoModel.dart';
 import '../model/asm_profile_model.dart';
 import '../service/asm_profile_service.dart';
+import '../service/session_manager.dart';
 import '../HomeDrawerpage/id_card_screen.dart';
 import 'attendance_history_page.dart';
 import 'edit_asm_profile_sheet.dart';
@@ -39,7 +39,10 @@ class _AsmProfilePageState extends State<AsmProfilePage> {
 
   void _loadProfile() {
     setState(() {
-      _profileFuture = AsmProfileService.getAsmProfile(_resolvedAsmId);
+      _profileFuture = AsmProfileService.getAsmProfile(_resolvedAsmId).then((profile) async {
+        await SessionManager.saveAsmProfile(profile);
+        return profile;
+      });
     });
   }
 

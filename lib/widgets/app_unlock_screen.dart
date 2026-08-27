@@ -7,6 +7,7 @@ import '../employeehomepage.dart';
 import '../homepage.dart';
 import '../model/TodoModel.dart';
 import '../service/app_security_service.dart';
+import '../service/session_manager.dart';
 
 class AppUnlockScreen extends StatefulWidget {
   final TodoModel userData;
@@ -51,30 +52,30 @@ class _AppUnlockScreenState extends State<AppUnlockScreen> {
     _isBiometricSupported = await AppSecurityService.isBiometricSupported();
     _isBiometricEnrolled = await AppSecurityService.isBiometricEnrolled();
 
-    // If fingerprint is enabled and device supports it with enrolled biometric,
-    // default to fingerprint mode and automatically prompt
-    if (_isFingerprintEnabled && _isBiometricSupported && _isBiometricEnrolled) {
-      setState(() {
-        _showPasswordView = false;
-      });
-      // Small delay to allow UI to mount before launching system dialog
-      Future.delayed(const Duration(milliseconds: 300), () {
+    // 1. If fingerprint is enabled:
+    if (_isFingerprintEnabled) {
+      if (mounted) {
+        setState(() {
+          _showPasswordView = false;
+          _statusMessage = null;
+          _isError = false;
+        });
+      }
+      // Trigger native biometric prompt automatically
+      WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           _authenticateWithFingerprint();
         }
       });
     } else {
-      // Fallback directly to password view
-      setState(() {
-        _showPasswordView = true;
-        if (_isFingerprintEnabled && (!_isBiometricSupported || !_isBiometricEnrolled)) {
-          _statusMessage =
-              "Fingerprint authentication is unavailable on this device. Please use your App Password.";
-          _isError = true;
-        } else if (_isPasswordEnabled) {
+      // 2. Password unlock:
+      if (mounted) {
+        setState(() {
+          _showPasswordView = true;
           _statusMessage = null;
-        }
-      });
+          _isError = false;
+        });
+      }
     }
   }
 
@@ -98,7 +99,7 @@ class _AppUnlockScreenState extends State<AppUnlockScreen> {
     });
 
     if (result.isSuccess) {
-      _navigateToHome();
+      await _navigateToHome();
     } else {
       setState(() {
         _statusMessage = result.message;
@@ -107,7 +108,7 @@ class _AppUnlockScreenState extends State<AppUnlockScreen> {
     }
   }
 
-  void _verifyAndUnlockWithPassword() {
+  Future<void> _verifyAndUnlockWithPassword() async {
     final entered = _passwordController.text.trim();
     if (entered.isEmpty) {
       setState(() {
@@ -118,7 +119,7 @@ class _AppUnlockScreenState extends State<AppUnlockScreen> {
     }
 
     if (AppSecurityService.verifyPassword(entered)) {
-      _navigateToHome();
+      await _navigateToHome();
     } else {
       setState(() {
         _statusMessage = "Incorrect password. Please try again.";
@@ -129,28 +130,55 @@ class _AppUnlockScreenState extends State<AppUnlockScreen> {
     }
   }
 
-  void _navigateToHome() {
-    Navigator.pushReplacement(
+  Future<void> _navigateToHome() async {
+    // Verify session validity before unlocking into Home
+    final bool loggedIn = await SessionManager.isLoggedIn();
+    final TodoModel? sessionData = await SessionManager.getLoginData();
+
+    if (!mounted) return;
+
+    if (!loggedIn || sessionData == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Session expired. Please login again.'),
+          backgroundColor: Colors.red.shade700,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => const HomePage()),
+        (route) => false,
+      );
+      return;
+    }
+
+    // Clean stack navigation directly to Home without duplicate routes
+    Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(
         builder: (_) => widget.isAsm
             ? AsmhomepageHomePage(
-                userData: widget.userData,
-                userId: widget.userId,
+                userData: sessionData,
+                userId: sessionData.empId?.toString() ??
+                    sessionData.asmId?.toString() ??
+                    widget.userId,
               )
             : EmployeeHomePage(
-                userData: widget.userData,
-                userId: widget.userId,
+                userData: sessionData,
+                userId: sessionData.empId?.toString() ?? widget.userId,
               ),
       ),
+      (route) => false,
     );
   }
 
   void _continueWithLogin() {
     // Navigate to existing login without modifying saved preferences
-    Navigator.pushReplacement(
+    Navigator.pushAndRemoveUntil(
       context,
       MaterialPageRoute(builder: (_) => const HomePage()),
+      (route) => false,
     );
   }
 
@@ -175,8 +203,8 @@ class _AppUnlockScreenState extends State<AppUnlockScreen> {
               children: [
                 // 1. App Logo / Brand Icon
                 Container(
-                  width: 90,
-                  height: 90,
+                  width: 88,
+                  height: 88,
                   decoration: BoxDecoration(
                     color: AppColors.white,
                     shape: BoxShape.circle,
@@ -194,7 +222,7 @@ class _AppUnlockScreenState extends State<AppUnlockScreen> {
                     'assets/durvasa_logo.png',
                     errorBuilder: (_, __, ___) => const Icon(
                       Icons.shield_outlined,
-                      size: 44,
+                      size: 42,
                       color: AppColors.primaryGreen,
                     ),
                   ),
@@ -222,7 +250,7 @@ class _AppUnlockScreenState extends State<AppUnlockScreen> {
                   ),
                 ),
 
-                const SizedBox(height: 32),
+                const SizedBox(height: 30),
 
                 // 3. Main Unlock Card
                 Container(
@@ -244,7 +272,7 @@ class _AppUnlockScreenState extends State<AppUnlockScreen> {
                       : _buildFingerprintView(),
                 ),
 
-                const SizedBox(height: 28),
+                const SizedBox(height: 26),
 
                 // 4. "Continue with Login" Fallback Option
                 TextButton.icon(
@@ -354,35 +382,36 @@ class _AppUnlockScreenState extends State<AppUnlockScreen> {
           ),
         ),
 
-        const SizedBox(height: 14),
-
-        // Switch to Password Button
-        SizedBox(
-          width: double.infinity,
-          height: 48,
-          child: OutlinedButton.icon(
-            onPressed: () {
-              setState(() {
-                _showPasswordView = true;
-                _statusMessage = null;
-                _isError = false;
-              });
-            },
-            icon: const Icon(Icons.lock_outline, size: 18, color: AppColors.primaryGreen),
-            label: Text(
-              "Use Password",
-              style: GoogleFonts.poppins(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: AppColors.primaryGreen,
+        // Password Fallback Button: Show if Password is enabled OR if biometric failed/cancelled
+        if (_isPasswordEnabled || _isError) ...[
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: OutlinedButton.icon(
+              onPressed: () {
+                setState(() {
+                  _showPasswordView = true;
+                  _statusMessage = null;
+                  _isError = false;
+                });
+              },
+              icon: const Icon(Icons.lock_outline, size: 18, color: AppColors.primaryGreen),
+              label: Text(
+                "Use Password",
+                style: GoogleFonts.poppins(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.primaryGreen,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: AppColors.primaryGreen, width: 1.5),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
-            style: OutlinedButton.styleFrom(
-              side: const BorderSide(color: AppColors.primaryGreen, width: 1.5),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            ),
           ),
-        ),
+        ],
       ],
     );
   }
