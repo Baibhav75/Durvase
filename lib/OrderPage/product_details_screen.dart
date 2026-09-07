@@ -432,7 +432,7 @@ class _ProductDetailsScreenState extends State<ProductDetailsScreen> {
                   itemBuilder: (context, index) {
                     final rawPath = images[index].startsWith('http')
                         ? images[index]
-                        : "https://durvasaayurved.online${images[index]}";
+                        : "https://durvasaayurved.com${images[index]}";
 
                     return InteractiveViewer(
                       maxScale: 3.0,

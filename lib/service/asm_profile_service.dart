@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 import '../model/asm_profile_model.dart';
 
 class AsmProfileService {
-  static const String baseUrl = 'https://durvasaayurved.online/api';
+  static const String baseUrl = 'https://durvasaayurved.com/api';
 
   /// Fetch ASM Profile details
   static Future<AsmProfileModel> getAsmProfile(int asmId) async {

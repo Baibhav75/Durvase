@@ -14,7 +14,9 @@ import '../../model/TodoModel1.dart';
 import '../../service/api_serviceProfile.dart';
 import '../../service/session_manager.dart';
 import 'mr_work_report_page.dart';
+import 'mr_work_report_history_page.dart';
 import 'profile_screen.dart';
+import '../../showcase_screen.dart';
 
 class HomeDrawer extends StatefulWidget {
   final TodoModel userData;
@@ -99,22 +101,26 @@ class _HomeDrawerState extends State<HomeDrawer> {
     );
   }
 
-  Future<void> _logout() async {
+  Future<void> _logout(BuildContext navContext) async {
     try {
       await SessionManager.logout();
 
-      if (!mounted) return;
-
-      Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+      Navigator.of(navContext, rootNavigator: true).pushAndRemoveUntil(
         MaterialPageRoute(builder: (context) => const HomePage()),
         (route) => false,
       );
     } catch (e) {
       debugPrint('Logout error: $e');
+      Navigator.of(navContext, rootNavigator: true).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (context) => const HomePage()),
+        (route) => false,
+      );
     }
   }
 
   void _showLogoutDialog(BuildContext context) {
+    final navContext = Navigator.of(context, rootNavigator: true).context;
+
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -142,7 +148,7 @@ class _HomeDrawerState extends State<HomeDrawer> {
           TextButton(
             onPressed: () {
               Navigator.of(ctx).pop();
-              _logout();
+              _logout(navContext);
             },
             child: Text(
               "Logout",
@@ -388,6 +394,24 @@ class _HomeDrawerState extends State<HomeDrawer> {
                 context,
                 MaterialPageRoute(
                   builder: (context) => MrWorkReportPage(userData: widget.userData),
+                ),
+              );
+            }),
+            _buildDrawerItem(Icons.history_edu_rounded, "Work Report History", () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => MRWorkReportHistoryPage(userData: widget.userData),
+                ),
+              );
+            }),
+            _buildDrawerItem(Icons.phone_iphone_rounded, "App Showcase", () {
+              Navigator.pop(context);
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const ShowcaseScreen(),
                 ),
               );
             }),

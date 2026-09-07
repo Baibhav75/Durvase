@@ -55,7 +55,7 @@ class _DealerPlaceOrderPageState extends State<DealerPlaceOrderPage> {
       'stock': 120,
       'badge': 'Bestseller',
       'points': '15',
-      'image': 'https://durvasaayurved.online/assets/images/livcare.png',
+      'image': 'https://durvasaayurved.com/assets/images/livcare.png',
       'qty': 0,
     },
     {
@@ -68,7 +68,7 @@ class _DealerPlaceOrderPageState extends State<DealerPlaceOrderPage> {
       'stock': 85,
       'badge': 'High Demand',
       'points': '25',
-      'image': 'https://durvasaayurved.online/assets/images/ashwagandha.png',
+      'image': 'https://durvasaayurved.com/assets/images/ashwagandha.png',
       'qty': 0,
     },
     {
@@ -81,7 +81,7 @@ class _DealerPlaceOrderPageState extends State<DealerPlaceOrderPage> {
       'stock': 95,
       'badge': 'Fast Moving',
       'points': '20',
-      'image': 'https://durvasaayurved.online/assets/images/ortho_oil.png',
+      'image': 'https://durvasaayurved.com/assets/images/ortho_oil.png',
       'qty': 0,
     },
     {
@@ -94,7 +94,7 @@ class _DealerPlaceOrderPageState extends State<DealerPlaceOrderPage> {
       'stock': 150,
       'badge': 'Essential',
       'points': '10',
-      'image': 'https://durvasaayurved.online/assets/images/triphala.png',
+      'image': 'https://durvasaayurved.com/assets/images/triphala.png',
       'qty': 0,
     },
     {
@@ -107,7 +107,7 @@ class _DealerPlaceOrderPageState extends State<DealerPlaceOrderPage> {
       'stock': 60,
       'badge': 'Premium',
       'points': '22',
-      'image': 'https://durvasaayurved.online/assets/images/bhringraj.png',
+      'image': 'https://durvasaayurved.com/assets/images/bhringraj.png',
       'qty': 0,
     },
     {
@@ -120,7 +120,7 @@ class _DealerPlaceOrderPageState extends State<DealerPlaceOrderPage> {
       'stock': 40,
       'badge': 'Seasonal',
       'points': '35',
-      'image': 'https://durvasaayurved.online/assets/images/chyawanprash.png',
+      'image': 'https://durvasaayurved.com/assets/images/chyawanprash.png',
       'qty': 0,
     },
     {
@@ -133,7 +133,7 @@ class _DealerPlaceOrderPageState extends State<DealerPlaceOrderPage> {
       'stock': 200,
       'badge': 'Fast Moving',
       'points': '8',
-      'image': 'https://durvasaayurved.online/assets/images/cough_syrup.png',
+      'image': 'https://durvasaayurved.com/assets/images/cough_syrup.png',
       'qty': 0,
     },
     {
@@ -146,7 +146,7 @@ class _DealerPlaceOrderPageState extends State<DealerPlaceOrderPage> {
       'stock': 110,
       'badge': 'Immunity',
       'points': '12',
-      'image': 'https://durvasaayurved.online/assets/images/giloy.png',
+      'image': 'https://durvasaayurved.com/assets/images/giloy.png',
       'qty': 0,
     },
   ];

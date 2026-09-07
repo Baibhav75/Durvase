@@ -5,7 +5,7 @@ import 'package:http/http.dart' as http;
 import '../model/asm_business_model.dart';
 
 class VisitorService {
-  static const String _baseUrl = 'https://durvasaayurved.online/api/GetAllVisiters';
+  static const String _baseUrl = 'https://durvasaayurved.com/api/GetAllVisiters';
 
   static Future<VisitorResponseModel> fetchAllVisitors() async {
     try {

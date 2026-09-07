@@ -55,5 +55,5 @@ class LatestProduct {
   }
 
   String get imageUrl =>
-      "https://durvasaayurved.online$productImage";
+      "https://durvasaayurved.com$productImage";
 }

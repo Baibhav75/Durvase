@@ -6,7 +6,7 @@ import '../model/Asmattendance_history_model.dart';
 
 class AttendanceHistoryService {
   static const String baseUrl =
-      'https://durvasaayurved.online/api';
+      'https://durvasaayurved.com/api';
 
   Future<List<AttendanceHistoryModel>> getAttendanceHistory(
     String empId,

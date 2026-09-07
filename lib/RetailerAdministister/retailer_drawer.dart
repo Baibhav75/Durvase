@@ -56,12 +56,11 @@ class _RetailerDrawerState extends State<RetailerDrawer> {
     );
   }
 
-  Future<void> _logout() async {
+  Future<void> _logout(BuildContext navContext) async {
     try {
       await RetailerSessionManager.logout();
-      if (!mounted) return;
 
-      Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+      Navigator.of(navContext, rootNavigator: true).pushAndRemoveUntil(
         MaterialPageRoute(
           builder: (_) => const HomePage(),
         ),
@@ -69,10 +68,18 @@ class _RetailerDrawerState extends State<RetailerDrawer> {
       );
     } catch (e) {
       debugPrint('Retailer logout error: $e');
+      Navigator.of(navContext, rootNavigator: true).pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (_) => const HomePage(),
+        ),
+        (_) => false,
+      );
     }
   }
 
   void _showLogoutDialog() {
+    final navContext = Navigator.of(context, rootNavigator: true).context;
+
     showDialog(
       context: context,
       builder: (dialogContext) {
@@ -107,7 +114,7 @@ class _RetailerDrawerState extends State<RetailerDrawer> {
             TextButton(
               onPressed: () {
                 Navigator.pop(dialogContext);
-                _logout();
+                _logout(navContext);
               },
               child: Text(
                 'Logout',
@@ -157,9 +164,15 @@ class _RetailerDrawerState extends State<RetailerDrawer> {
   }
 
   Widget _profileHeader() {
-    final name = widget.retailer.name.isNotEmpty ? widget.retailer.name : 'Gupta Ayurvedic Pharmacy';
-    final email = widget.retailer.email.isNotEmpty ? widget.retailer.email : 'retailer@durvasaayurved.com';
-    final retailerId = widget.retailer.retailerId.isNotEmpty ? widget.retailer.retailerId : 'RET-DA-809';
+    final personName = widget.retailer.personName.isNotEmpty
+        ? widget.retailer.personName
+        : (widget.retailer.name.isNotEmpty ? widget.retailer.name : 'Rahul Kumar');
+    final businessName = widget.retailer.businessName.isNotEmpty
+        ? widget.retailer.businessName
+        : 'Durvasa Ayurveda Store';
+    final visiterId = widget.retailer.visiterId.isNotEmpty
+        ? widget.retailer.visiterId
+        : (widget.retailer.retailerId.isNotEmpty ? widget.retailer.retailerId : 'VTR107086');
 
     return DrawerHeader(
       margin: EdgeInsets.zero,
@@ -186,31 +199,31 @@ class _RetailerDrawerState extends State<RetailerDrawer> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      name,
+                      personName,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.poppins(
-                        fontSize: 16,
+                        fontSize: 15,
                         fontWeight: FontWeight.w700,
                         color: AppColors.white,
                       ),
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      email,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.poppins(
-                        fontSize: 12,
-                        color: AppColors.cream.withValues(alpha: 0.9),
+                    if (businessName.isNotEmpty && businessName != personName)
+                      Text(
+                        businessName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.poppins(
+                          fontSize: 11.5,
+                          color: AppColors.cream.withValues(alpha: 0.9),
+                        ),
                       ),
-                    ),
                     const SizedBox(height: 2),
                     Text(
-                      'Retailer ID: $retailerId',
+                      'Visiter ID: $visiterId',
                       style: GoogleFonts.poppins(
                         fontSize: 11,
-                        fontWeight: FontWeight.w500,
+                        fontWeight: FontWeight.w600,
                         color: AppColors.lightGold,
                       ),
                     ),
@@ -234,7 +247,7 @@ class _RetailerDrawerState extends State<RetailerDrawer> {
   }
 
   Widget _profileImage() {
-    final image = widget.retailer.profile;
+    final imageUrl = widget.retailer.fullPhotoUrl;
     return Container(
       decoration: BoxDecoration(
         shape: BoxShape.circle,
@@ -246,8 +259,8 @@ class _RetailerDrawerState extends State<RetailerDrawer> {
       child: CircleAvatar(
         radius: 28,
         backgroundColor: AppColors.white,
-        backgroundImage: image.isNotEmpty ? NetworkImage(image) : null,
-        child: image.isEmpty
+        backgroundImage: imageUrl.isNotEmpty ? NetworkImage(imageUrl) : null,
+        child: imageUrl.isEmpty
             ? const Icon(
                 Icons.storefront_rounded,
                 color: AppColors.primaryGreen,

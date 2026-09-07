@@ -173,7 +173,7 @@ class Data1 {
     if (path.startsWith('http://') || path.startsWith('https://')) {
       return path;
     }
-    const baseUrl = 'https://durvasaayurved.online';
+    const baseUrl = 'https://durvasaayurved.com';
     if (path.startsWith('/')) {
       return '$baseUrl$path';
     }

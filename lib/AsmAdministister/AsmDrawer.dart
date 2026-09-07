@@ -115,13 +115,11 @@ class _AsmDrawerState extends State<AsmDrawer> {
   // LOGOUT
   // ============================================================
 
-  Future<void> _logout() async {
+  Future<void> _logout(BuildContext navContext) async {
     try {
       await SessionManager.logout();
 
-      if (!mounted) return;
-
-      Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+      Navigator.of(navContext, rootNavigator: true).pushAndRemoveUntil(
         MaterialPageRoute(
           builder: (_) => const HomePage(),
         ),
@@ -129,10 +127,18 @@ class _AsmDrawerState extends State<AsmDrawer> {
       );
     } catch (e) {
       debugPrint('Logout error: $e');
+      Navigator.of(navContext, rootNavigator: true).pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (_) => const HomePage(),
+        ),
+        (_) => false,
+      );
     }
   }
 
   void _showLogoutDialog() {
+    final navContext = Navigator.of(context, rootNavigator: true).context;
+
     showDialog(
       context: context,
       builder: (dialogContext) {
@@ -167,7 +173,7 @@ class _AsmDrawerState extends State<AsmDrawer> {
             TextButton(
               onPressed: () {
                 Navigator.pop(dialogContext);
-                _logout();
+                _logout(navContext);
               },
               child: Text(
                 'Logout',

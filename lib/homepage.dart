@@ -10,6 +10,7 @@ import 'employeehomepage.dart';
 import 'model/TodoModel.dart';
 import 'service/app_security_service.dart';
 import 'service/session_manager.dart';
+import 'showcase_screen.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -18,10 +19,13 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin {
+class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   late AnimationController _animController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
+
+  late AnimationController _ambientController;
+  late Animation<double> _ambientAnimation;
 
   bool _isFingerprintEnabled = false;
   bool _isBiometricAuthenticating = false;
@@ -30,6 +34,8 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
   void initState() {
     super.initState();
     _checkFingerprintStatus();
+
+    // 1. Entrance Stagger Animation
     _animController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 900),
@@ -46,11 +52,22 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       curve: Curves.easeOutCubic,
     ));
     _animController.forward();
+
+    // 2. Continuous Ambient Floating Motion
+    _ambientController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 8),
+    )..repeat(reverse: true);
+    _ambientAnimation = CurvedAnimation(
+      parent: _ambientController,
+      curve: Curves.easeInOutSine,
+    );
   }
 
   @override
   void dispose() {
     _animController.dispose();
+    _ambientController.dispose();
     super.dispose();
   }
 
@@ -276,10 +293,39 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       backgroundColor: AppColors.creamBackground,
       body: Stack(
         children: [
-          // 1. Ambient Luxury Gradient Orbs (Botanical Emerald & Sacred Gold)
+          // 1. Premium Background Texture / Image Layer
+          Positioned.fill(
+            child: Opacity(
+              opacity: 0.08,
+              child: Image.asset(
+                'assets/appiconwithoutbackground.png',
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+              ),
+            ),
+          ),
+
+          // 2. Subtle Luxury Gradient Veil
+          Positioned.fill(
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [
+                    AppColors.creamBackground.withOpacity(0.92),
+                    AppColors.creamBackground.withOpacity(0.85),
+                    const Color(0xFFF6F1E3).withOpacity(0.95),
+                  ],
+                ),
+              ),
+            ),
+          ),
+
+          // 3. Ambient Luxury Gradient Orbs (Botanical Emerald & Sacred Gold)
           _buildAmbientGlows(size),
 
-          // 2. Main Scrollable Content with Staggered Fade
+          // 4. Main Scrollable Content with Staggered Fade
           SafeArea(
             child: FadeTransition(
               opacity: _fadeAnimation,
@@ -387,6 +433,28 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                         },
                       ),
 
+                      const SizedBox(height: 14),
+
+                      _buildGlassPortalCard(
+                        title: 'Mobile App Showcase',
+                        subtitle: 'Interactive dual iOS mockups, subscription plans & features walkthrough',
+                        icon: Icons.phone_iphone_rounded,
+                        tagText: 'INTERACTIVE DEMO',
+                        tagColor: AppColors.leafGreen,
+                        gradientColors: const [
+                          Color(0xFF0F3B2C),
+                          Color(0xFF1E5B44),
+                        ],
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const ShowcaseScreen(),
+                            ),
+                          );
+                        },
+                      ),
+
                       const SizedBox(height: 32),
 
                       // 8. Luxury Glass Footer
@@ -403,90 +471,95 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
       ),
     );
   }
-
   // ============================================================
-  // 1. AMBIENT GLOW ORBS & BACKGROUND
+  // 1. AMBIENT GLOW ORBS & BACKGROUND (Live Smooth Motion)
   // ============================================================
   Widget _buildAmbientGlows(Size size) {
     return IgnorePointer(
-      child: Stack(
-        children: [
-          // Top Right Emerald Orb
-          Positioned(
-            top: -60,
-            right: -60,
-            child: Container(
-              height: 240,
-              width: 240,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    AppColors.primaryGreen.withValues(alpha: 0.18),
-                    AppColors.primaryGreen.withValues(alpha: 0.0),
-                  ],
+      child: AnimatedBuilder(
+        animation: _ambientAnimation,
+        builder: (context, child) {
+          final val = _ambientAnimation.value;
+          return Stack(
+            children: [
+              // Top Right Emerald Orb (Floating)
+              Positioned(
+                top: -70 + (25 * val),
+                right: -70 + (20 * (1 - val)),
+                child: Container(
+                  height: 250 + (20 * val),
+                  width: 250 + (20 * val),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        AppColors.primaryGreen.withOpacity(0.18 + (0.04 * val)),
+                        AppColors.primaryGreen.withOpacity(0.0),
+                      ],
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
 
-          // Top Left Gold Glow
-          Positioned(
-            top: 60,
-            left: -80,
-            child: Container(
-              height: 220,
-              width: 220,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    AppColors.primaryGold.withValues(alpha: 0.15),
-                    AppColors.primaryGold.withValues(alpha: 0.0),
-                  ],
+              // Top Left Sacred Gold Glow (Drifting)
+              Positioned(
+                top: 50 + (20 * (1 - val)),
+                left: -90 + (30 * val),
+                child: Container(
+                  height: 230 + (20 * (1 - val)),
+                  width: 230 + (20 * (1 - val)),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        AppColors.primaryGold.withOpacity(0.15 + (0.05 * val)),
+                        AppColors.primaryGold.withOpacity(0.0),
+                      ],
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
 
-          // Center Jade Aura
-          Positioned(
-            top: size.height * 0.42,
-            right: -100,
-            child: Container(
-              height: 260,
-              width: 260,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    AppColors.secondaryGreen.withValues(alpha: 0.12),
-                    Colors.transparent,
-                  ],
+              // Center Jade Aura (Breathing)
+              Positioned(
+                top: (size.height * 0.40) + (35 * val),
+                right: -110 + (25 * val),
+                child: Container(
+                  height: 270 + (25 * val),
+                  width: 270 + (25 * val),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        AppColors.secondaryGreen.withOpacity(0.12 + (0.04 * val)),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
 
-          // Bottom Sacred Gold Glow
-          Positioned(
-            bottom: -50,
-            left: -40,
-            child: Container(
-              height: 200,
-              width: 200,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(
-                  colors: [
-                    AppColors.lightGold.withValues(alpha: 0.20),
-                    Colors.transparent,
-                  ],
+              // Bottom Sacred Gold Glow (Expanding)
+              Positioned(
+                bottom: -60 + (20 * (1 - val)),
+                left: -50 + (25 * val),
+                child: Container(
+                  height: 210 + (25 * val),
+                  width: 210 + (25 * val),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        AppColors.lightGold.withOpacity(0.20 + (0.06 * val)),
+                        Colors.transparent,
+                      ],
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }

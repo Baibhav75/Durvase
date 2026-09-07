@@ -39,36 +39,57 @@ class _RetailerProfilePageState extends State<RetailerProfilePage> {
   }
 
   Future<RetailerProfileData> _fetchProfile() async {
-    // 1. Get Retailer ID from SessionManager, fallback to widget.retailer
-    String? retailerId = await SessionManager.getRetailerId();
-    if (retailerId == null || retailerId.isEmpty) {
-      retailerId = widget.retailer.retailerId;
-      if (retailerId.isNotEmpty) {
-        await SessionManager.saveRetailerId(retailerId);
+    // 1. Get Visiter / Retailer ID from SessionManager, fallback to widget.retailer
+    String? visiterId = await SessionManager.getVisiterId();
+    if (visiterId == null || visiterId.isEmpty) {
+      visiterId = widget.retailer.visiterId.isNotEmpty
+          ? widget.retailer.visiterId
+          : widget.retailer.retailerId;
+      if (visiterId.isNotEmpty) {
+        await SessionManager.saveRetailerId(visiterId);
       }
     }
 
-    if (retailerId.isEmpty) {
-      throw Exception('Retailer ID is missing.');
+    if (visiterId.isEmpty) {
+      throw Exception('Visiter ID is missing.');
     }
 
-    final response = await RetailerProfileService.getRetailerProfile(retailerId);
+    final response = await RetailerProfileService.getRetailerProfile(visiterId);
 
-    if (response.status?.toString().toLowerCase() == 'success' && response.data != null) {
+    if (response.isSuccess && response.data != null) {
       return response.data!;
     }
 
     // Fallback: If API returns empty data, construct from widget.retailer
     if (response.data == null) {
       return RetailerProfileData(
-        retailerId: retailerId,
-        name: widget.retailer.name,
+        visiterId: visiterId,
+        personName: widget.retailer.personName.isNotEmpty
+            ? widget.retailer.personName
+            : widget.retailer.name,
+        businessName: widget.retailer.businessName.isNotEmpty
+            ? widget.retailer.businessName
+            : 'Durvasa Ayurveda Store',
         email: widget.retailer.email,
         mobile: widget.retailer.phone,
-        address: widget.retailer.businessAddress,
-        image: widget.retailer.profile,
-        status: 'Active',
-        employeeType: 'Retailer',
+        address: widget.retailer.address.isNotEmpty
+            ? widget.retailer.address
+            : widget.retailer.businessAddress,
+        photo: widget.retailer.fullPhotoUrl.isNotEmpty
+            ? widget.retailer.fullPhotoUrl
+            : widget.retailer.profile,
+        empType: widget.retailer.empType.isNotEmpty
+            ? widget.retailer.empType
+            : 'Permanent',
+        visitFor: widget.retailer.visitFor.isNotEmpty
+            ? widget.retailer.visitFor
+            : 'Business Development',
+        purpose: widget.retailer.purpose.isNotEmpty
+            ? widget.retailer.purpose
+            : 'Retailer',
+        status: widget.retailer.status.isNotEmpty
+            ? widget.retailer.status
+            : 'Active',
       );
     }
 
@@ -321,109 +342,131 @@ class _RetailerProfilePageState extends State<RetailerProfilePage> {
                   _buildProfileHeader(profile),
                   const SizedBox(height: 16),
 
-                  // 2. Personal Information Section
+                  // 2. Personal & Store Information Section
                   _buildSection(
-                    title: 'Personal & Contact Information',
+                    title: 'Contact & Business Details',
                     icon: Icons.person_outline_rounded,
                     children: [
                       _buildInfoRow(
                         Icons.person_rounded,
-                        'Full Name',
-                        _val(profile.name ?? widget.retailer.name),
-                        onCopy: () => _copyToClipboard(_val(profile.name ?? widget.retailer.name), 'Name'),
+                        'Person Name',
+                        _val(profile.personName ?? profile.name ?? widget.retailer.personName),
+                        onCopy: () => _copyToClipboard(_val(profile.personName ?? profile.name ?? widget.retailer.personName), 'Person Name'),
                       ),
-                      if (profile.fatherName != null && profile.fatherName!.trim().isNotEmpty)
+                      if (profile.businessName != null && profile.businessName!.trim().isNotEmpty)
                         _buildInfoRow(
-                          Icons.family_restroom_outlined,
-                          'Father\'s Name',
-                          _val(profile.fatherName),
+                          Icons.storefront_outlined,
+                          'Business / Store Name',
+                          _val(profile.businessName ?? widget.retailer.businessName),
+                          highlightValue: true,
+                          onCopy: () => _copyToClipboard(_val(profile.businessName ?? widget.retailer.businessName), 'Business Name'),
                         ),
-                      if (profile.gender != null && profile.gender!.trim().isNotEmpty)
+                      _buildInfoRow(
+                        Icons.phone_outlined,
+                        'Mobile Number',
+                        _val(profile.mobile ?? widget.retailer.phone),
+                        actionIcon: Icons.phone_forwarded_rounded,
+                        actionColor: AppColors.leafGreen,
+                        onAction: () => _makePhoneCall(profile.mobile ?? widget.retailer.phone),
+                        onCopy: () => _copyToClipboard(_val(profile.mobile ?? widget.retailer.phone), 'Mobile Number'),
+                      ),
+                      if (profile.email != null && profile.email!.trim().isNotEmpty)
                         _buildInfoRow(
-                          Icons.wc_outlined,
-                          'Gender',
-                          _val(profile.gender),
+                          Icons.email_outlined,
+                          'Email Address',
+                          _val(profile.email ?? widget.retailer.email),
+                          actionIcon: Icons.mail_outline_rounded,
+                          actionColor: AppColors.primaryGreen,
+                          onAction: () => _sendEmail(profile.email ?? widget.retailer.email),
+                          onCopy: () => _copyToClipboard(_val(profile.email ?? widget.retailer.email), 'Email Address'),
                         ),
                       if (profile.billedGroup != null && profile.billedGroup!.trim().isNotEmpty)
                         _buildInfoRow(
                           Icons.category_outlined,
                           'Billed Group',
                           _val(profile.billedGroup),
-                          highlightValue: true,
                           onCopy: () => _copyToClipboard(_val(profile.billedGroup), 'Billed Group'),
                         ),
-                      _buildInfoRow(
-                        Icons.phone_outlined,
-                        'Primary Mobile',
-                        _val(profile.mobile ?? widget.retailer.phone),
-                        actionIcon: Icons.phone_forwarded_rounded,
-                        actionColor: AppColors.leafGreen,
-                        onAction: () => _makePhoneCall(profile.mobile ?? widget.retailer.phone),
-                        onCopy: () => _copyToClipboard(_val(profile.mobile ?? widget.retailer.phone), 'Primary Mobile'),
-                      ),
-                      if (profile.mobileAlt != null && profile.mobileAlt!.trim().isNotEmpty)
-                        _buildInfoRow(
-                          Icons.phone_iphone_outlined,
-                          'Alternate Mobile',
-                          _val(profile.mobileAlt),
-                          actionIcon: Icons.phone_forwarded_rounded,
-                          actionColor: AppColors.primaryGold,
-                          onAction: () => _makePhoneCall(profile.mobileAlt),
-                          onCopy: () => _copyToClipboard(_val(profile.mobileAlt), 'Alternate Mobile'),
-                        ),
-                      if (profile.emergenceNo != null && profile.emergenceNo!.trim().isNotEmpty)
-                        _buildInfoRow(
-                          Icons.emergency_outlined,
-                          'Emergency Contact',
-                          _val(profile.emergenceNo),
-                          actionIcon: Icons.phone_forwarded_rounded,
-                          actionColor: const Color(0xFFD32F2F),
-                          highlightValue: true,
-                          onAction: () => _makePhoneCall(profile.emergenceNo),
-                          onCopy: () => _copyToClipboard(_val(profile.emergenceNo), 'Emergency Contact'),
-                        ),
-                      _buildInfoRow(
-                        Icons.email_outlined,
-                        'Email Address',
-                        _val(profile.email ?? widget.retailer.email),
-                        actionIcon: Icons.mail_outline_rounded,
-                        actionColor: AppColors.primaryGreen,
-                        onAction: () => _sendEmail(profile.email ?? widget.retailer.email),
-                        onCopy: () => _copyToClipboard(_val(profile.email ?? widget.retailer.email), 'Email Address'),
-                      ),
                     ],
                   ),
                   const SizedBox(height: 14),
 
-                  // 3. Official & Retailer Details Section
+                  // 3. Visit & Assigned MR / Employee Information
                   _buildSection(
-                    title: 'Retailer & Account Details',
-                    icon: Icons.storefront_outlined,
+                    title: 'Visit & Representative Details',
+                    icon: Icons.badge_outlined,
                     children: [
                       _buildInfoRow(
                         Icons.fingerprint_rounded,
-                        'Retailer ID',
-                        _val(profile.retailerId ?? widget.retailer.retailerId),
+                        'Visiter ID',
+                        _val(profile.visiterId ?? profile.retailerId ?? widget.retailer.visiterId),
                         highlightValue: true,
-                        onCopy: () => _copyToClipboard(_val(profile.retailerId ?? widget.retailer.retailerId), 'Retailer ID'),
+                        onCopy: () => _copyToClipboard(_val(profile.visiterId ?? profile.retailerId ?? widget.retailer.visiterId), 'Visiter ID'),
                       ),
-                      if (profile.retailerCode != null && profile.retailerCode!.trim().isNotEmpty)
-                        _buildInfoRow(
-                          Icons.qr_code_2_rounded,
-                          'Retailer Code',
-                          _val(profile.retailerCode),
-                          onCopy: () => _copyToClipboard(_val(profile.retailerCode), 'Retailer Code'),
-                        ),
                       _buildInfoRow(
-                        Icons.verified_user_outlined,
-                        'Portal Role',
-                        profile.displayDesignation,
+                        Icons.category_outlined,
+                        'Purpose / Role',
+                        _val(profile.purpose ?? widget.retailer.purpose ?? 'Retailer'),
                       ),
-                      if (profile.joinDate != null && profile.joinDate!.trim().isNotEmpty)
+                      if (profile.empType != null && profile.empType!.trim().isNotEmpty)
                         _buildInfoRow(
-                          Icons.calendar_month_outlined,
-                          'Joining Date',
-                          profile.formattedJoinDate,
+                          Icons.work_history_outlined,
+                          'Employment Type',
+                          _val(profile.empType ?? widget.retailer.empType),
+                        ),
+                      if (profile.visitFor != null && profile.visitFor!.trim().isNotEmpty)
+                        _buildInfoRow(
+                          Icons.business_center_outlined,
+                          'Visit For',
+                          _val(profile.visitFor ?? widget.retailer.visitFor),
+                        ),
+                      if (profile.visitDate != null && profile.visitDate!.trim().isNotEmpty)
+                        _buildInfoRow(
+                          Icons.calendar_today_rounded,
+                          'Visit Date',
+                          profile.formattedVisitDate,
+                        ),
+                      if (profile.revisitDate != null && profile.revisitDate!.trim().isNotEmpty)
+                        _buildInfoRow(
+                          Icons.event_repeat_rounded,
+                          'Revisit Date',
+                          profile.formattedRevisitDate,
+                        ),
+                      if (profile.reVisited != null && profile.reVisited!.trim().isNotEmpty)
+                        _buildInfoRow(
+                          Icons.sync_rounded,
+                          'Re-Visited Status',
+                          _val(profile.reVisited),
+                        ),
+                      if (profile.empName != null && profile.empName!.trim().isNotEmpty)
+                        _buildInfoRow(
+                          Icons.support_agent_rounded,
+                          'Assigned MR / Officer',
+                          _val(profile.empName),
+                          onCopy: () => _copyToClipboard(_val(profile.empName), 'Assigned MR'),
+                        ),
+                      if (profile.employeeId != null && profile.employeeId!.trim().isNotEmpty)
+                        _buildInfoRow(
+                          Icons.badge_rounded,
+                          'MR Employee ID',
+                          _val(profile.employeeId),
+                          onCopy: () => _copyToClipboard(_val(profile.employeeId), 'MR Employee ID'),
+                        ),
+                      if (profile.empMobile != null && profile.empMobile!.trim().isNotEmpty)
+                        _buildInfoRow(
+                          Icons.phone_in_talk_rounded,
+                          'MR Contact Number',
+                          _val(profile.empMobile),
+                          actionIcon: Icons.phone_forwarded_rounded,
+                          actionColor: AppColors.leafGreen,
+                          onAction: () => _makePhoneCall(profile.empMobile),
+                          onCopy: () => _copyToClipboard(_val(profile.empMobile), 'MR Mobile Number'),
+                        ),
+                      if (profile.remark != null && profile.remark!.trim().isNotEmpty)
+                        _buildInfoRow(
+                          Icons.notes_rounded,
+                          'Remark / Notes',
+                          _val(profile.remark),
                         ),
                       _buildInfoRow(
                         profile.isActive
@@ -435,18 +478,6 @@ class _RetailerProfilePageState extends State<RetailerProfilePage> {
                             ? AppColors.primaryGreen
                             : AppColors.error,
                       ),
-                      if (profile.createdAt != null && profile.createdAt!.trim().isNotEmpty)
-                        _buildInfoRow(
-                          Icons.access_time_rounded,
-                          'Registration Date',
-                          profile.formattedCreatedAt,
-                        ),
-                      if (profile.updatedAt != null && profile.updatedAt!.trim().isNotEmpty)
-                        _buildInfoRow(
-                          Icons.update_rounded,
-                          'Last Updated',
-                          profile.formattedUpdatedAt,
-                        ),
                     ],
                   ),
                   const SizedBox(height: 14),
@@ -477,12 +508,6 @@ class _RetailerProfilePageState extends State<RetailerProfilePage> {
                         'Country',
                         _val(profile.country ?? 'India'),
                       ),
-                      if (profile.postOffice != null && profile.postOffice!.trim().isNotEmpty)
-                        _buildInfoRow(
-                          Icons.local_post_office_outlined,
-                          'Post Office',
-                          _val(profile.postOffice),
-                        ),
                     ],
                   ),
                   const SizedBox(height: 14),
@@ -564,12 +589,15 @@ class _RetailerProfilePageState extends State<RetailerProfilePage> {
     );
   }
 
+
   // ============================================================
   // LUXURY PROFILE HEADER BANNER
   // ============================================================
   Widget _buildProfileHeader(RetailerProfileData profile) {
     final imageUrl = profile.resolvedImageUrl;
-    final name = _val(profile.name ?? widget.retailer.name);
+    final personName = _val(profile.personName ?? profile.name ?? widget.retailer.personName);
+    final businessName = profile.businessName ?? widget.retailer.businessName;
+    final visiterId = _val(profile.visiterId ?? profile.retailerId ?? widget.retailer.visiterId);
 
     return Container(
       width: double.infinity,
@@ -603,7 +631,7 @@ class _RetailerProfilePageState extends State<RetailerProfilePage> {
             alignment: Alignment.bottomRight,
             children: [
               GestureDetector(
-                onTap: () => _showImagePreviewDialog(imageUrl, name),
+                onTap: () => _showImagePreviewDialog(imageUrl, personName),
                 child: Container(
                   height: 105,
                   width: 105,
@@ -687,9 +715,9 @@ class _RetailerProfilePageState extends State<RetailerProfilePage> {
           ),
           const SizedBox(height: 14),
 
-          // Name
+          // Person Name
           Text(
-            name,
+            personName,
             textAlign: TextAlign.center,
             style: GoogleFonts.poppins(
               fontSize: 21,
@@ -698,20 +726,32 @@ class _RetailerProfilePageState extends State<RetailerProfilePage> {
               letterSpacing: 0.4,
             ),
           ),
+          if (businessName != null && businessName.isNotEmpty && businessName != personName) ...[
+            const SizedBox(height: 2),
+            Text(
+              businessName,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: AppColors.cream,
+              ),
+            ),
+          ],
           const SizedBox(height: 3),
 
           // Designation
           Text(
             profile.displayDesignation,
             style: GoogleFonts.poppins(
-              fontSize: 13,
+              fontSize: 12.5,
               fontWeight: FontWeight.w600,
               color: AppColors.lightGold,
             ),
           ),
           const SizedBox(height: 12),
 
-          // Badges Wrap (Retailer ID, Code, Location, Status)
+          // Badges Wrap (Visiter ID, Purpose, Location, Status)
           Wrap(
             spacing: 8,
             runSpacing: 6,
@@ -719,14 +759,13 @@ class _RetailerProfilePageState extends State<RetailerProfilePage> {
             children: [
               _buildHeaderChip(
                 icon: Icons.fingerprint,
-                text: 'ID: ${profile.retailerId ?? widget.retailer.retailerId}',
-                onTap: () => _copyToClipboard(profile.retailerId ?? widget.retailer.retailerId, 'Retailer ID'),
+                text: 'ID: $visiterId',
+                onTap: () => _copyToClipboard(visiterId, 'Visiter ID'),
               ),
-              if (profile.retailerCode != null && profile.retailerCode!.trim().isNotEmpty)
+              if (profile.purpose != null && profile.purpose!.trim().isNotEmpty)
                 _buildHeaderChip(
-                  icon: Icons.qr_code_2_rounded,
-                  text: 'Code: ${profile.retailerCode}',
-                  onTap: () => _copyToClipboard(profile.retailerCode!, 'Retailer Code'),
+                  icon: Icons.category_rounded,
+                  text: profile.purpose!.trim(),
                 ),
               if (profile.district != null || profile.state != null)
                 _buildHeaderChip(
@@ -742,7 +781,7 @@ class _RetailerProfilePageState extends State<RetailerProfilePage> {
           ),
           const SizedBox(height: 16),
 
-          // Quick Action Icons Row (Call, Alt Call, Email, ID Card)
+          // Quick Action Icons Row (Call, MR Call, Email, ID Card)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
@@ -758,11 +797,11 @@ class _RetailerProfilePageState extends State<RetailerProfilePage> {
                   label: 'Call',
                   onTap: () => _makePhoneCall(profile.mobile ?? widget.retailer.phone),
                 ),
-                if (profile.mobileAlt != null && profile.mobileAlt!.trim().isNotEmpty)
+                if (profile.empMobile != null && profile.empMobile!.trim().isNotEmpty)
                   _buildQuickActionButton(
-                    icon: Icons.phone_iphone_rounded,
-                    label: 'Alt Call',
-                    onTap: () => _makePhoneCall(profile.mobileAlt),
+                    icon: Icons.support_agent_rounded,
+                    label: 'MR Call',
+                    onTap: () => _makePhoneCall(profile.empMobile),
                   ),
                 _buildQuickActionButton(
                   icon: Icons.email_rounded,

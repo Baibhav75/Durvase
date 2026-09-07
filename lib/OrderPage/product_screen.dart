@@ -80,7 +80,7 @@ class _ProductScreenState extends State<ProductScreen> {
   Future<void> _addToCart(Product product) async {
     try {
       if (widget.userId.isNotEmpty) {
-        final url = Uri.parse('https://durvasaayurved.online/api/AddToCart/AddToCart?ProductID=${product.productId}&UserID=${widget.userId}&Qty=1');
+        final url = Uri.parse('https://durvasaayurved.com/api/AddToCart/AddToCart?ProductID=${product.productId}&UserID=${widget.userId}&Qty=1');
         final response = await http.post(url);
         if (response.statusCode == 200) {
           final jsonResponse = jsonDecode(response.body);
@@ -324,7 +324,7 @@ class _ProductScreenState extends State<ProductScreen> {
                   ),
                   child: product.image1.isNotEmpty
                       ? Image.network(
-                          'https://durvasaayurved.online${product.image1}',
+                          'https://durvasaayurved.com${product.image1}',
                           fit: BoxFit.contain,
                           errorBuilder: (context, error, stackTrace) => Icon(
                             Icons.image_not_supported,

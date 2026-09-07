@@ -75,8 +75,8 @@ class MyOrderModel {
     final raw = image.trim();
     if (raw.isEmpty) return '';
     if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
-    if (raw.startsWith('/')) return 'https://durvasaayurved.online$raw';
-    return 'https://durvasaayurved.online/$raw';
+    if (raw.startsWith('/')) return 'https://durvasaayurved.com$raw';
+    return 'https://durvasaayurved.com/$raw';
   }
 
   int get discountPercentage {

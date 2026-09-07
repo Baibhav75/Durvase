@@ -1,8 +1,15 @@
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class ApiConstants {
-  static String get baseUrl =>
-      dotenv.env['API_BASE_URL'] ?? '';
+  static const String _defaultBaseUrl = 'https://durvasaayurved.com';
+  
+  static String get baseUrl {
+    final envUrl = dotenv.env['API_BASE_URL'];
+    if (envUrl != null && envUrl.trim().isNotEmpty) {
+      return envUrl.trim();
+    }
+    return _defaultBaseUrl;
+  }
 
   static String get getBannerImage =>
       "$baseUrl/api/GetBannerImage/GetBannerImage";
@@ -50,11 +57,29 @@ class ApiConstants {
   static String get getAllRetailer =>
       "$baseUrl/api/GetAllRetailer";
 
+  // Get All ASM List
+  static String get getAsmList =>
+      "$baseUrl/api/ASMlist";
+
   // Proceed to Checkout / Place Order
   static String get placeOrder =>
       "$baseUrl/api/ProceedToCheckout/PlaceOrder";
   // My Orders - Dealer
   static String get getMyOrders =>
       "$baseUrl/api/GetByRetailerIdDealerProduct/GetDetails";
+
+  // Visiter / Retailer Login
+  static String get visiterLogin =>
+      "$baseUrl/api/visiterlogin";
+
+  // Visiter / Retailer Profile
+  static String get visiterProfile =>
+      "$baseUrl/api/visiterprofile";
+
+  // Get Address Retailer / Dealer by Visiter ID
+  static String get getByAddressRetailerDealer =>
+      "$baseUrl/api/GetByAddressRetailerDealer";
 }
+
+
 

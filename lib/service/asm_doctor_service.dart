@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import '../model/asm_doctor_model.dart';
 
 class DoctorService {
-  static const String _byVisitForUrl = 'https://durvasaayurved.online/api/GetVisiteByvisitFor';
+  static const String _byVisitForUrl = 'https://durvasaayurved.com/api/GetVisiteByvisitFor';
 
   static Future<DoctorResponseModel> fetchDoctorVisitors() async {
     try {

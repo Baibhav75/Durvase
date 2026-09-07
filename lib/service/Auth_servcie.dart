@@ -15,7 +15,7 @@ import 'session_manager.dart';
 
 class AuthService {
   static const String baseUrl =
-      "https://durvasaayurved.online/api";
+      "https://durvasaayurved.com/api";
 
   Future<List<Category>> getCategories() async {
     final response = await http.get(

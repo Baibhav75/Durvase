@@ -3,7 +3,7 @@ import 'package:http/http.dart' as http;
 import '/model/location_dart_model.dart';
 
 class DynamicLocationService {
-  static const String baseUrl = 'https://durvasaayurved.online/API/';
+  static const String baseUrl = 'https://durvasaayurved.com/API/';
 
   // Fetch location data based on employee ID
   static Future<LocationDataModel?> getLocationData(String employeeId) async {

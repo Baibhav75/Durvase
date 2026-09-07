@@ -31,7 +31,10 @@ class _DealerProfilePageState extends State<DealerProfilePage> {
 
   void _loadProfile() {
     setState(() {
-      _profileFuture = DealerProfileService.getDealerProfile(widget.dealer.dealerId);
+      final dealerId = widget.dealer.dealerId.isNotEmpty
+          ? widget.dealer.dealerId
+          : widget.dealer.visiterId;
+      _profileFuture = DealerProfileService.getDealerProfile(dealerId);
     });
   }
 
@@ -90,6 +93,7 @@ class _DealerProfilePageState extends State<DealerProfilePage> {
       _copyToClipboard(email, 'Email Address');
     }
   }
+
   void _openEditProfileModal(DealerProfileModel currentProfile) {
     showModalBottomSheet(
       context: context,
@@ -97,7 +101,7 @@ class _DealerProfilePageState extends State<DealerProfilePage> {
       backgroundColor: Colors.transparent,
       builder: (ctx) => EditDealerProfileSheet(
         profile: currentProfile,
-        dealerId: widget.dealer.dealerId,
+        dealerId: widget.dealer.dealerId.isNotEmpty ? widget.dealer.dealerId : widget.dealer.visiterId,
         onProfileUpdated: () {
           _loadProfile();
           ScaffoldMessenger.of(context).showSnackBar(
@@ -118,15 +122,6 @@ class _DealerProfilePageState extends State<DealerProfilePage> {
       ),
     );
   }
-
-  // void _openIdCard() {
-  //   Navigator.push(
-  //     context,
-  //     MaterialPageRoute(
-  //       builder: (_) => DealerIdCardScreen(dealer: widget.dealer),
-  //     ),
-  //   );
-  // }
 
   void _showImagePreviewDialog(String imageUrl, String name) {
     if (imageUrl.isEmpty) return;
@@ -224,11 +219,6 @@ class _DealerProfilePageState extends State<DealerProfilePage> {
           ),
         ),
         actions: [
-          // IconButton(
-          //   icon: const Icon(Icons.badge_outlined, color: AppColors.lightGold),
-          //   tooltip: 'View ID Card',
-          //   onPressed: _openIdCard,
-          // ),
           IconButton(
             icon: const Icon(Icons.refresh_rounded, color: AppColors.primaryGold),
             tooltip: 'Refresh',
@@ -271,18 +261,72 @@ class _DealerProfilePageState extends State<DealerProfilePage> {
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 36),
               child: Column(
                 children: [
-                  // 1. Header Banner with Avatar & Badges
+                  // 1. Header Banner with Avatar, Name, Business & Badges
                   _buildProfileHeader(profile),
                   const SizedBox(height: 16),
 
-                  // 2. Personal / Contact Information Section
+                  // 2. Business & Store Information Section
+                  _buildSection(
+                    title: 'Business & Store Details',
+                    icon: Icons.storefront_rounded,
+                    children: [
+                      if (profile.businessName != null && profile.businessName!.trim().isNotEmpty)
+                        _buildInfoRow(
+                          Icons.store_rounded,
+                          'Firm / Store Name',
+                          _val(profile.businessName),
+                          highlightValue: true,
+                          onCopy: () => _copyToClipboard(_val(profile.businessName), 'Firm Name'),
+                        ),
+                      _buildInfoRow(
+                        Icons.fingerprint_rounded,
+                        'Dealer / Visit ID',
+                        _val(profile.dealerId),
+                        highlightValue: true,
+                        onCopy: () => _copyToClipboard(_val(profile.dealerId), 'Dealer ID'),
+                      ),
+                      if (profile.purpose != null && profile.purpose!.trim().isNotEmpty)
+                        _buildInfoRow(
+                          Icons.assignment_ind_outlined,
+                          'Purpose / Role',
+                          _val(profile.purpose),
+                        ),
+                      if (profile.visitFor != null && profile.visitFor!.trim().isNotEmpty)
+                        _buildInfoRow(
+                          Icons.local_hospital_outlined,
+                          'Visit For',
+                          _val(profile.visitFor),
+                        ),
+                      if (profile.gstNumber != null && profile.gstNumber!.trim().isNotEmpty && profile.gstNumber!.trim().toLowerCase() != 'null')
+                        _buildInfoRow(
+                          Icons.receipt_long_outlined,
+                          'GST Number',
+                          _val(profile.gstNumber),
+                          onCopy: () => _copyToClipboard(_val(profile.gstNumber), 'GST Number'),
+                        ),
+                      _buildInfoRow(
+                        profile.isActive ? Icons.verified_outlined : Icons.cancel_outlined,
+                        'Account Status',
+                        profile.isActive ? 'Active' : 'Inactive',
+                        valueColor: profile.isActive ? AppColors.leafGreen : AppColors.error,
+                      ),
+                      _buildInfoRow(
+                        Icons.access_time_rounded,
+                        'Registered Date',
+                        profile.formattedCreatedAt,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+
+                  // 3. Contact Information Section
                   _buildSection(
                     title: 'Contact Information',
                     icon: Icons.person_outline_rounded,
                     children: [
                       _buildInfoRow(
                         Icons.person_rounded,
-                        'Dealer Name',
+                        'Contact Person',
                         _val(profile.name),
                         onCopy: () => _copyToClipboard(_val(profile.name), 'Name'),
                       ),
@@ -295,70 +339,137 @@ class _DealerProfilePageState extends State<DealerProfilePage> {
                         onAction: () => _makePhoneCall(profile.phone),
                         onCopy: () => _copyToClipboard(_val(profile.phone), 'Mobile Number'),
                       ),
-                      _buildInfoRow(
-                        Icons.email_outlined,
-                        'Email Address',
-                        _val(profile.email),
-                        actionIcon: Icons.mail_outline_rounded,
-                        actionColor: AppColors.primaryGreen,
-                        onAction: () => _sendEmail(profile.email),
-                        onCopy: () => _copyToClipboard(_val(profile.email), 'Email Address'),
-                      ),
+                      if (profile.email != null && profile.email!.trim().isNotEmpty && profile.email!.trim().toLowerCase() != 'null')
+                        _buildInfoRow(
+                          Icons.email_outlined,
+                          'Email Address',
+                          _val(profile.email),
+                          actionIcon: Icons.mail_outline_rounded,
+                          actionColor: AppColors.primaryGreen,
+                          onAction: () => _sendEmail(profile.email),
+                          onCopy: () => _copyToClipboard(_val(profile.email), 'Email Address'),
+                        ),
                     ],
                   ),
                   const SizedBox(height: 14),
 
-                  // 3. Business & Official Details Section
+                  // 4. Business Location & Address Section
                   _buildSection(
-                    title: 'Business & Official Details',
-                    icon: Icons.badge_outlined,
+                    title: 'Business Location',
+                    icon: Icons.location_on_outlined,
                     children: [
                       _buildInfoRow(
-                        Icons.fingerprint_rounded,
-                        'Dealer ID',
-                        _val(profile.dealerId),
-                        highlightValue: true,
-                        onCopy: () => _copyToClipboard(_val(profile.dealerId), 'Dealer ID'),
-                      ),
-                      _buildInfoRow(
-                        Icons.receipt_long_outlined,
-                        'GST Number',
-                        _val(profile.gstNumber),
-                        onCopy: () => _copyToClipboard(_val(profile.gstNumber), 'GST Number'),
-                      ),
-                      _buildInfoRow(
-                        profile.isActive
-                            ? Icons.verified_outlined
-                            : Icons.cancel_outlined,
-                        'Account Status',
-                        profile.isActive ? 'Active' : 'Inactive',
-                        valueColor: profile.isActive
-                            ? AppColors.primaryGreen
-                            : AppColors.error,
-                      ),
-                      _buildInfoRow(
-                        Icons.access_time_rounded,
-                        'Registered Date',
-                        profile.formattedCreatedAt,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-
-                  // 4. Business Address Section
-                  _buildSection(
-                    title: 'Business Address',
-                    icon: Icons.home_outlined,
-                    children: [
-                      _buildInfoRow(
-                        Icons.location_on_outlined,
+                        Icons.home_work_outlined,
                         'Full Address',
                         _val(profile.businessAddress),
                         onCopy: () => _copyToClipboard(_val(profile.businessAddress), 'Address'),
                       ),
+                      if (profile.block != null && profile.block!.trim().isNotEmpty)
+                        _buildInfoRow(
+                          Icons.holiday_village_outlined,
+                          'Block / Area',
+                          _val(profile.block),
+                        ),
+                      if (profile.district != null && profile.district!.trim().isNotEmpty)
+                        _buildInfoRow(
+                          Icons.location_city_rounded,
+                          'District / City',
+                          _val(profile.district),
+                        ),
+                      if (profile.state != null && profile.state!.trim().isNotEmpty)
+                        _buildInfoRow(
+                          Icons.map_outlined,
+                          'State',
+                          _val(profile.state),
+                        ),
+                      if (profile.country != null && profile.country!.trim().isNotEmpty)
+                        _buildInfoRow(
+                          Icons.public_rounded,
+                          'Country',
+                          _val(profile.country),
+                        ),
                     ],
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 14),
+
+                  // 5. Assigned Representative / Executive Details (if present)
+                  if ((profile.empName != null && profile.empName!.trim().isNotEmpty) ||
+                      (profile.employeeId != null && profile.employeeId!.trim().isNotEmpty))
+                    _buildSection(
+                      title: 'Field Representative / Officer',
+                      icon: Icons.badge_outlined,
+                      children: [
+                        if (profile.empName != null && profile.empName!.trim().isNotEmpty)
+                          _buildInfoRow(
+                            Icons.support_agent_rounded,
+                            'Executive Name',
+                            _val(profile.empName),
+                          ),
+                        if (profile.employeeId != null && profile.employeeId!.trim().isNotEmpty)
+                          _buildInfoRow(
+                            Icons.perm_identity_rounded,
+                            'Employee ID',
+                            _val(profile.employeeId),
+                          ),
+                        if (profile.empType != null && profile.empType!.trim().isNotEmpty)
+                          _buildInfoRow(
+                            Icons.work_outline_rounded,
+                            'Designation / Type',
+                            _val(profile.empType),
+                          ),
+                        if (profile.empMobile != null && profile.empMobile!.trim().isNotEmpty)
+                          _buildInfoRow(
+                            Icons.phone_android_rounded,
+                            'Officer Mobile',
+                            _val(profile.empMobile),
+                            actionIcon: Icons.phone_forwarded_rounded,
+                            actionColor: AppColors.leafGreen,
+                            onAction: () => _makePhoneCall(profile.empMobile),
+                            onCopy: () => _copyToClipboard(_val(profile.empMobile), 'Officer Mobile'),
+                          ),
+                      ],
+                    ),
+                  if ((profile.empName != null && profile.empName!.trim().isNotEmpty) ||
+                      (profile.employeeId != null && profile.employeeId!.trim().isNotEmpty))
+                    const SizedBox(height: 14),
+
+                  // 6. Visit Tracking & Field Notes (if present)
+                  if ((profile.remark != null && profile.remark!.trim().isNotEmpty) ||
+                      (profile.revisitDate != null && profile.revisitDate!.trim().isNotEmpty) ||
+                      (profile.reVisited != null && profile.reVisited!.trim().isNotEmpty))
+                    _buildSection(
+                      title: 'Visit Tracking & Notes',
+                      icon: Icons.event_note_rounded,
+                      children: [
+                        if (profile.reVisited != null && profile.reVisited!.trim().isNotEmpty)
+                          _buildInfoRow(
+                            Icons.repeat_rounded,
+                            'Re-Visited Status',
+                            _val(profile.reVisited),
+                          ),
+                        if (profile.revisitDate != null && profile.revisitDate!.trim().isNotEmpty)
+                          _buildInfoRow(
+                            Icons.calendar_today_rounded,
+                            'Next Revisit Date',
+                            profile.formattedRevisitDate,
+                            valueColor: AppColors.primaryGreen,
+                          ),
+                        if (profile.remark != null && profile.remark!.trim().isNotEmpty)
+                          _buildInfoRow(
+                            Icons.notes_rounded,
+                            'Meeting Notes',
+                            _val(profile.remark),
+                          ),
+                      ],
+                    ),
+                  if ((profile.remark != null && profile.remark!.trim().isNotEmpty) ||
+                      (profile.revisitDate != null && profile.revisitDate!.trim().isNotEmpty) ||
+                      (profile.reVisited != null && profile.reVisited!.trim().isNotEmpty))
+                    const SizedBox(height: 14),
+
+                  const SizedBox(height: 10),
+
+                  // Edit Profile Button
                   Row(
                     children: [
                       Expanded(
@@ -366,12 +477,12 @@ class _DealerProfilePageState extends State<DealerProfilePage> {
                           onPressed: () => _openEditProfileModal(profile),
                           icon: const Icon(Icons.edit_note_rounded, color: AppColors.white, size: 22),
                           label: Text(
-                            'Edit Profile',
-                            style: GoogleFonts.poppins(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.white),
+                            'Edit Profile Details',
+                            style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.white),
                           ),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primaryGreen,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            padding: const EdgeInsets.symmetric(vertical: 15),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                             elevation: 3,
                           ),
@@ -379,34 +490,6 @@ class _DealerProfilePageState extends State<DealerProfilePage> {
                       ),
                     ],
                   ),
-
-                  // 5. Action Buttons (ID Card commented out for now)
-                  // Row(
-                  //   children: [
-                  //     Expanded(
-                  //       child: OutlinedButton.icon(
-                  //         onPressed: _openIdCard,
-                  //         icon: const Icon(Icons.badge_outlined, color: AppColors.primaryGreen, size: 20),
-                  //         label: Text(
-                  //           'Official ID Card',
-                  //           style: GoogleFonts.poppins(
-                  //             fontSize: 13.5,
-                  //             fontWeight: FontWeight.w700,
-                  //             color: AppColors.primaryGreen,
-                  //           ),
-                  //         ),
-                  //         style: OutlinedButton.styleFrom(
-                  //           side: const BorderSide(color: AppColors.primaryGreen, width: 1.5),
-                  //           padding: const EdgeInsets.symmetric(vertical: 14),
-                  //           shape: RoundedRectangleBorder(
-                  //             borderRadius: BorderRadius.circular(16),
-                  //           ),
-                  //           backgroundColor: AppColors.white,
-                  //         ),
-                  //       ),
-                  //     ),
-                  //   ],
-                  // ),
                 ],
               ),
             ),
@@ -421,6 +504,9 @@ class _DealerProfilePageState extends State<DealerProfilePage> {
   // ============================================================
   Widget _buildProfileHeader(DealerProfileModel profile) {
     final imageUrl = profile.resolvedImageUrl;
+    final primaryName = (profile.businessName != null && profile.businessName!.trim().isNotEmpty)
+        ? profile.businessName!
+        : (profile.name ?? 'Authorized Dealer');
 
     return Container(
       width: double.infinity,
@@ -451,7 +537,7 @@ class _DealerProfilePageState extends State<DealerProfilePage> {
         children: [
           // Circular Avatar with gold border, tap-to-zoom
           GestureDetector(
-            onTap: () => _showImagePreviewDialog(imageUrl, profile.name ?? 'Dealer Profile'),
+            onTap: () => _showImagePreviewDialog(imageUrl, primaryName),
             child: Container(
               height: 105,
               width: 105,
@@ -516,22 +602,35 @@ class _DealerProfilePageState extends State<DealerProfilePage> {
           ),
           const SizedBox(height: 14),
 
-          // Name
+          // Business / Dealer Name
           Text(
-            _val(profile.name),
+            _val(primaryName),
             textAlign: TextAlign.center,
             style: GoogleFonts.poppins(
-              fontSize: 21,
+              fontSize: 20,
               fontWeight: FontWeight.w800,
               color: AppColors.white,
               letterSpacing: 0.4,
             ),
           ),
+          if (profile.businessName != null && profile.businessName!.trim().isNotEmpty && profile.name != null) ...[
+            const SizedBox(height: 2),
+            Text(
+              'Prop: ${_val(profile.name)}',
+              style: GoogleFonts.poppins(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: AppColors.cream,
+              ),
+            ),
+          ],
           const SizedBox(height: 3),
 
           // Role label
           Text(
-            'Authorized Dealer',
+            profile.purpose != null && profile.purpose!.trim().isNotEmpty
+                ? 'Authorized ${profile.purpose!.trim()}'
+                : 'Authorized Dealer',
             style: GoogleFonts.poppins(
               fontSize: 13,
               fontWeight: FontWeight.w600,
@@ -552,7 +651,7 @@ class _DealerProfilePageState extends State<DealerProfilePage> {
                   text: 'ID: ${profile.dealerId}',
                   onTap: () => _copyToClipboard(profile.dealerId!, 'Dealer ID'),
                 ),
-              if (profile.gstNumber != null && profile.gstNumber!.trim().isNotEmpty)
+              if (profile.gstNumber != null && profile.gstNumber!.trim().isNotEmpty && profile.gstNumber!.trim().toLowerCase() != 'null')
                 _buildHeaderChip(
                   icon: Icons.receipt_long_outlined,
                   text: 'GST: ${profile.gstNumber}',
@@ -567,7 +666,7 @@ class _DealerProfilePageState extends State<DealerProfilePage> {
           ),
           const SizedBox(height: 16),
 
-          // Quick Action Icons Row (Call, Email — ID Card commented)
+          // Quick Action Icons Row (Call, Email)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
             decoration: BoxDecoration(
@@ -588,11 +687,6 @@ class _DealerProfilePageState extends State<DealerProfilePage> {
                   label: 'Email',
                   onTap: () => _sendEmail(profile.email),
                 ),
-                // _buildQuickActionButton(
-                //   icon: Icons.badge_rounded,
-                //   label: 'ID Card',
-                //   onTap: _openIdCard,
-                // ),
               ],
             ),
           ),
@@ -610,7 +704,7 @@ class _DealerProfilePageState extends State<DealerProfilePage> {
       onTap: onTap,
       borderRadius: BorderRadius.circular(10),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -738,7 +832,7 @@ class _DealerProfilePageState extends State<DealerProfilePage> {
           Icon(icon, size: 17, color: AppColors.textSecondary),
           const SizedBox(width: 10),
           SizedBox(
-            width: 120,
+            width: 130,
             child: Text(
               label,
               style: GoogleFonts.poppins(
@@ -798,12 +892,12 @@ class _DealerProfilePageState extends State<DealerProfilePage> {
           children: [
             const Icon(
               Icons.cloud_off_rounded,
+              size: 54,
               color: AppColors.warning,
-              size: 50,
             ),
             const SizedBox(height: 14),
             Text(
-              'Unable to load profile',
+              'Unable to Load Dealer Profile',
               style: GoogleFonts.poppins(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
@@ -815,18 +909,20 @@ class _DealerProfilePageState extends State<DealerProfilePage> {
               message,
               textAlign: TextAlign.center,
               style: GoogleFonts.poppins(
-                fontSize: 11.5,
+                fontSize: 12.5,
                 color: AppColors.textSecondary,
               ),
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 20),
             ElevatedButton.icon(
               onPressed: _loadProfile,
-              icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Retry'),
+              icon: const Icon(Icons.refresh_rounded, color: AppColors.white, size: 18),
+              label: Text(
+                'Try Again',
+                style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: AppColors.white),
+              ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryGreen,
-                foregroundColor: AppColors.white,
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),

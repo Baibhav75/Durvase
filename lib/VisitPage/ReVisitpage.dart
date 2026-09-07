@@ -1,13 +1,12 @@
-
-
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
+
+import '../constants/app_colors.dart';
+import '../model/TodoModel1.dart';
 import '../model/visit_history_model.dart';
 import '../service/visit_history_service.dart';
-import '../model/TodoModel.dart';
-import '/model/TodoModel1.dart';
 import '/VisitPage/taskVisitFormenter.dart';
 
 class ReVisitPage extends StatefulWidget {
@@ -63,37 +62,35 @@ class _ReVisitPageState extends State<ReVisitPage> {
 
     try {
       String empMobile = widget.employeeData?.mobile ?? '8024272651';
-      print('Loading re-visit history for mobile: $empMobile');
-
       final model = await VisitHistoryService.getVisitorList(empMobile);
 
-      setState(() {
-        visitHistoryModel = model;
-        visitorsList = model?.visitors ?? [];
-        // Filter to show only re-visits
-        filteredVisits = visitorsList?.where((visit) => 
-          visit.reVisited?.toLowerCase() == 'yes').toList() ?? [];
-        isLoading = false;
-        isRefreshing = false;
-      });
-
-      print('✅ Loaded ${filteredVisits?.length ?? 0} re-visits');
+      if (mounted) {
+        setState(() {
+          visitHistoryModel = model;
+          visitorsList = model?.visitors ?? [];
+          // Filter to show only re-visits
+          filteredVisits = visitorsList?.where((visit) =>
+              visit.reVisited?.toLowerCase() == 'yes').toList() ?? [];
+          isLoading = false;
+          isRefreshing = false;
+        });
+      }
     } catch (e) {
-      setState(() {
-        isLoading = false;
-        isRefreshing = false;
-        errorMessage = 'Failed to load re-visit history. Please try again.';
-      });
-      print('❌ Error loading re-visit history: $e');
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+          isRefreshing = false;
+          errorMessage = 'Failed to load re-visit history. Please try again.';
+        });
+      }
     }
   }
 
   void _filterVisits(String filter) {
     if (visitorsList == null) return;
 
-    // First filter for re-visits only
-    List<Visitors> revisitList = visitorsList!.where((visit) => 
-      visit.reVisited?.toLowerCase() == 'yes').toList();
+    List<Visitors> revisitList = visitorsList!.where((visit) =>
+        visit.reVisited?.toLowerCase() == 'yes').toList();
 
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -103,7 +100,7 @@ class _ReVisitPageState extends State<ReVisitPage> {
 
     setState(() {
       selectedFilter = filter;
-      _searchQuery = ''; // Clear search when filter changes
+      _searchQuery = '';
       _searchController.clear();
 
       switch (filter) {
@@ -148,13 +145,10 @@ class _ReVisitPageState extends State<ReVisitPage> {
       _searchQuery = query;
 
       if (query.isEmpty) {
-        // If search is empty, apply current filter
         _filterVisits(selectedFilter);
       } else {
-        // Apply search on currently filtered list
         List<Visitors> baseList = visitorsList!;
 
-        // Apply current filter first
         if (selectedFilter != 'All') {
           final now = DateTime.now();
           final today = DateTime(now.year, now.month, now.day);
@@ -194,11 +188,9 @@ class _ReVisitPageState extends State<ReVisitPage> {
           }
         }
 
-        // Filter for re-visits only
-        baseList = baseList.where((visit) => 
-          visit.reVisited?.toLowerCase() == 'yes').toList();
+        baseList = baseList.where((visit) =>
+            visit.reVisited?.toLowerCase() == 'yes').toList();
 
-        // Then apply search
         filteredVisits = baseList.where((visit) {
           final businessName = visit.businessName?.toLowerCase() ?? '';
           final personName = visit.personName?.toLowerCase() ?? '';
@@ -226,7 +218,7 @@ class _ReVisitPageState extends State<ReVisitPage> {
       } else {
         return DateTime.tryParse(dateString);
       }
-    } catch (e) {
+    } catch (_) {
       return null;
     }
   }
@@ -246,7 +238,7 @@ class _ReVisitPageState extends State<ReVisitPage> {
         return DateFormat('dd MMM yyyy').format(date);
       }
       return dateString;
-    } catch (e) {
+    } catch (_) {
       return dateString;
     }
   }
@@ -258,76 +250,108 @@ class _ReVisitPageState extends State<ReVisitPage> {
     await _loadVisitHistory();
   }
 
-  // Call function
   Future<void> _makePhoneCall(String phoneNumber) async {
     final Uri launchUri = Uri(
       scheme: 'tel',
-      path: phoneNumber,
+      path: phoneNumber.replaceAll(RegExp(r'[^0-9+]'), ''),
     );
     if (await canLaunchUrl(launchUri)) {
       await launchUrl(launchUri);
     } else {
-      _showSnackBar('Cannot make call to $phoneNumber', Colors.red);
+      _showSnackBar('Cannot make call to $phoneNumber', AppColors.error);
     }
   }
 
-  // View Order function
   void _viewOrder(Visitors visit) {
     showModalBottomSheet(
       context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
       builder: (context) => Container(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+        decoration: const BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Center(
               child: Container(
-                width: 40,
-                height: 4,
+                width: 44,
+                height: 4.5,
+                margin: const EdgeInsets.only(bottom: 18),
                 decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: BorderRadius.circular(2),
+                  color: AppColors.textSecondary.withOpacity(0.3),
+                  borderRadius: BorderRadius.circular(3),
                 ),
               ),
             ),
-            const SizedBox(height: 16),
-            Text(
-              'Re-Visit Order Details',
-              style: GoogleFonts.poppins(
-                fontSize: 20,
-                fontWeight: FontWeight.w600,
-                color: Colors.deepPurple,
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryGold.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: const Icon(Icons.replay_circle_filled_rounded, color: AppColors.deepGold, size: 22),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  'Re-Visit Order Details',
+                  style: GoogleFonts.poppins(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textDark,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: AppColors.creamBackground,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.lightGold.withOpacity(0.5)),
+              ),
+              child: Column(
+                children: [
+                  _buildDetailRow('Business', visit.businessName ?? 'N/A'),
+                  const Divider(height: 14, color: AppColors.lightGold),
+                  _buildDetailRow('Customer', visit.personName ?? 'N/A'),
+                  const Divider(height: 14, color: AppColors.lightGold),
+                  _buildDetailRow('Mobile', visit.mobile ?? 'N/A'),
+                  const Divider(height: 14, color: AppColors.lightGold),
+                  _buildDetailRow('Re-Visit Date', _formatDate(visit.visitDate)),
+                  const Divider(height: 14, color: AppColors.lightGold),
+                  _buildDetailRow('Purpose', visit.purpose ?? 'N/A'),
+                  const Divider(height: 14, color: AppColors.lightGold),
+                  _buildDetailRow('Type', visit.visitFor ?? 'N/A'),
+                ],
               ),
             ),
-            const SizedBox(height: 16),
-            _buildDetailRow('Business', visit.businessName ?? 'N/A'),
-            _buildDetailRow('Customer', visit.personName ?? 'N/A'),
-            _buildDetailRow('Mobile', visit.mobile ?? 'N/A'),
-            _buildDetailRow('Re-Visit Date', _formatDate(visit.visitDate)),
-            _buildDetailRow('Purpose', visit.purpose ?? 'N/A'),
-            _buildDetailRow('Type', visit.visitFor ?? 'N/A'),
             const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
+              height: 48,
               child: ElevatedButton(
                 onPressed: () => Navigator.pop(context),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.deepPurple,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  backgroundColor: AppColors.primaryGreen,
+                  foregroundColor: AppColors.white,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(14),
                   ),
+                  elevation: 2,
                 ),
                 child: Text(
                   'Close',
                   style: GoogleFonts.poppins(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
                   ),
                 ),
               ),
@@ -338,38 +362,63 @@ class _ReVisitPageState extends State<ReVisitPage> {
     );
   }
 
-  // Continue Re-Visit function
   void _continueReVisit(Visitors visit) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-        title: Text(
-          'Continue Re-Visit',
-          style: GoogleFonts.poppins(
-            fontWeight: FontWeight.w600,
-            color: Colors.green[800],
-          ),
-          textAlign: TextAlign.center,
+        backgroundColor: AppColors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.primaryGold.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(Icons.replay_rounded, color: AppColors.deepGold, size: 22),
+            ),
+            const SizedBox(width: 10),
+            Text(
+              'Continue Re-Visit',
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.w700,
+                color: AppColors.textDark,
+                fontSize: 17,
+              ),
+            ),
+          ],
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildVisitDetailItem(Icons.business, 'Business', visit.businessName),
-            _buildVisitDetailItem(Icons.person, 'Customer', visit.personName),
-            _buildVisitDetailItem(Icons.phone, 'Mobile', visit.mobile),
-            const SizedBox(height: 16),
-            Text(
-              'Continue the re-visit for this customer?',
-              style: GoogleFonts.poppins(
-                fontSize: 14,
-                color: Colors.grey[700],
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.creamBackground,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.lightGold.withOpacity(0.5)),
               ),
-              textAlign: TextAlign.center,
+              child: Column(
+                children: [
+                  _buildVisitDetailItem(Icons.business_rounded, 'Business', visit.businessName),
+                  _buildVisitDetailItem(Icons.person_rounded, 'Customer', visit.personName),
+                  _buildVisitDetailItem(Icons.phone_rounded, 'Mobile', visit.mobile),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              'Would you like to open the visit form prefilled with this client data?',
+              style: GoogleFonts.poppins(
+                fontSize: 13,
+                color: AppColors.textSecondary,
+              ),
             ),
           ],
         ),
+        actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         actions: [
           Row(
             children: [
@@ -377,16 +426,16 @@ class _ReVisitPageState extends State<ReVisitPage> {
                 child: OutlinedButton(
                   onPressed: () => Navigator.pop(context),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.grey,
-                    side: BorderSide(color: Colors.grey[300]!),
+                    foregroundColor: AppColors.textSecondary,
+                    side: BorderSide(color: AppColors.lightGold.withOpacity(0.8)),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                     padding: const EdgeInsets.symmetric(vertical: 12),
                   ),
                   child: Text(
                     'Cancel',
-                    style: GoogleFonts.poppins(fontWeight: FontWeight.w500),
+                    style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 13),
                   ),
                 ),
               ),
@@ -394,6 +443,7 @@ class _ReVisitPageState extends State<ReVisitPage> {
               Expanded(
                 child: ElevatedButton(
                   onPressed: () {
+                    Navigator.pop(context);
                     Navigator.push(
                       context,
                       MaterialPageRoute(
@@ -405,16 +455,17 @@ class _ReVisitPageState extends State<ReVisitPage> {
                     );
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    foregroundColor: Colors.white,
+                    backgroundColor: AppColors.primaryGreen,
+                    foregroundColor: AppColors.white,
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                     padding: const EdgeInsets.symmetric(vertical: 12),
+                    elevation: 2,
                   ),
                   child: Text(
                     'Continue',
-                    style: GoogleFonts.poppins(fontWeight: FontWeight.w500),
+                    style: GoogleFonts.poppins(fontWeight: FontWeight.w600, fontSize: 13),
                   ),
                 ),
               ),
@@ -426,28 +477,33 @@ class _ReVisitPageState extends State<ReVisitPage> {
   }
 
   Widget _buildDetailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '$label: ',
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 90,
+          child: Text(
+            label,
             style: GoogleFonts.poppins(
               fontWeight: FontWeight.w500,
-              color: Colors.grey[700],
+              fontSize: 12.5,
+              color: AppColors.textSecondary,
             ),
           ),
-          Expanded(
-            child: Text(
-              value,
-              style: GoogleFonts.poppins(
-                color: Colors.grey[800],
-              ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textDark,
             ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -456,23 +512,25 @@ class _ReVisitPageState extends State<ReVisitPage> {
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
-          Icon(icon, size: 16, color: Colors.grey[600]),
+          Icon(icon, size: 15, color: AppColors.primaryGreen),
           const SizedBox(width: 8),
           Text(
             '$label: ',
             style: GoogleFonts.poppins(
-              fontSize: 13,
+              fontSize: 12.5,
               fontWeight: FontWeight.w500,
-              color: Colors.grey[700],
+              color: AppColors.textSecondary,
             ),
           ),
           Expanded(
             child: Text(
               value ?? 'N/A',
               style: GoogleFonts.poppins(
-                fontSize: 13,
-                color: Colors.grey[800],
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textDark,
               ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
@@ -485,11 +543,12 @@ class _ReVisitPageState extends State<ReVisitPage> {
       SnackBar(
         content: Text(
           message,
-          style: GoogleFonts.poppins(),
+          style: GoogleFonts.poppins(color: AppColors.white, fontSize: 13),
         ),
         backgroundColor: color,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        duration: const Duration(seconds: 2),
       ),
     );
   }
@@ -497,21 +556,27 @@ class _ReVisitPageState extends State<ReVisitPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: AppColors.creamBackground,
       appBar: AppBar(
         title: Text(
           "Re-Visit History",
           style: GoogleFonts.poppins(
-            fontWeight: FontWeight.w600,
-            color: Colors.white,
+            fontWeight: FontWeight.w700,
+            color: AppColors.white,
+            fontSize: 18,
           ),
         ),
-        backgroundColor: Colors.deepPurple,
+        backgroundColor: AppColors.primaryGreen,
+        foregroundColor: AppColors.white,
         elevation: 0,
         centerTitle: true,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, color: AppColors.white, size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white),
+            icon: const Icon(Icons.refresh_rounded, color: AppColors.primaryGold),
             onPressed: _refreshData,
             tooltip: 'Refresh',
           ),
@@ -546,57 +611,59 @@ class _ReVisitPageState extends State<ReVisitPage> {
 
   Widget _buildSearchBar() {
     return Container(
-      padding: const EdgeInsets.all(16),
-      color: Colors.white,
-      child: TextField(
-        controller: _searchController,
-        decoration: InputDecoration(
-          hintText: 'Search re-visits by business, customer, mobile...',
-          hintStyle: GoogleFonts.poppins(color: Colors.grey[500]),
-          prefixIcon: const Icon(Icons.search, color: Colors.grey),
-          suffixIcon: _searchQuery.isNotEmpty
-              ? IconButton(
-            icon: const Icon(Icons.clear, color: Colors.grey),
-            onPressed: () {
-              _searchController.clear();
-              _searchVisits('');
-            },
-          )
-              : null,
-          filled: true,
-          fillColor: Colors.grey[50],
-          border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none,
-          ),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      color: AppColors.creamBackground,
+      child: Container(
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: AppColors.lightGold.withOpacity(0.6)),
+          boxShadow: [
+            BoxShadow(
+              color: AppColors.primaryGreen.withOpacity(0.04),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
         ),
-        style: GoogleFonts.poppins(),
-        onChanged: _searchVisits,
+        child: TextField(
+          controller: _searchController,
+          decoration: InputDecoration(
+            hintText: 'Search by client, customer, mobile...',
+            hintStyle: GoogleFonts.poppins(color: AppColors.textSecondary, fontSize: 13),
+            prefixIcon: const Icon(Icons.search_rounded, color: AppColors.primaryGreen, size: 20),
+            suffixIcon: _searchQuery.isNotEmpty
+                ? IconButton(
+                    icon: const Icon(Icons.clear_rounded, color: AppColors.textSecondary, size: 18),
+                    onPressed: () {
+                      _searchController.clear();
+                      _searchVisits('');
+                    },
+                  )
+                : null,
+            border: InputBorder.none,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          ),
+          style: GoogleFonts.poppins(fontSize: 13.5, color: AppColors.textDark),
+          onChanged: _searchVisits,
+        ),
       ),
     );
   }
 
   Widget _buildFilterSection() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-      color: Colors.white,
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+      color: AppColors.creamBackground,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Filter by:',
-            style: GoogleFonts.poppins(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: Colors.grey[700],
-            ),
-          ),
-          const SizedBox(height: 8),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
             child: Row(
               children: filters.map((filter) {
+                final isSelected = selectedFilter == filter;
                 return Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: FilterChip(
@@ -604,14 +671,20 @@ class _ReVisitPageState extends State<ReVisitPage> {
                       filter,
                       style: GoogleFonts.poppins(
                         fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: selectedFilter == filter ? Colors.white : Colors.deepPurple,
+                        fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                        color: isSelected ? AppColors.white : AppColors.textDark,
                       ),
                     ),
-                    selected: selectedFilter == filter,
-                    selectedColor: Colors.deepPurple,
-                    backgroundColor: Colors.grey[100],
-                    checkmarkColor: Colors.white,
+                    selected: isSelected,
+                    selectedColor: AppColors.primaryGreen,
+                    backgroundColor: AppColors.white,
+                    checkmarkColor: AppColors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                      side: BorderSide(
+                        color: isSelected ? AppColors.primaryGreen : AppColors.lightGold.withOpacity(0.8),
+                      ),
+                    ),
                     onSelected: (bool selected) {
                       _filterVisits(filter);
                     },
@@ -620,12 +693,16 @@ class _ReVisitPageState extends State<ReVisitPage> {
               }).toList(),
             ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            'Showing ${filteredVisits?.length ?? 0} re-visits${_searchQuery.isNotEmpty ? ' for "$_searchQuery"' : ''}',
-            style: GoogleFonts.poppins(
-              fontSize: 12,
-              color: Colors.grey[600],
+          const SizedBox(height: 6),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: Text(
+              'Showing ${filteredVisits?.length ?? 0} re-visits${_searchQuery.isNotEmpty ? ' for "$_searchQuery"' : ''}',
+              style: GoogleFonts.poppins(
+                fontSize: 11.5,
+                color: AppColors.textSecondary,
+                fontWeight: FontWeight.w500,
+              ),
             ),
           ),
         ],
@@ -640,10 +717,13 @@ class _ReVisitPageState extends State<ReVisitPage> {
 
     return RefreshIndicator(
       onRefresh: _refreshData,
-      color: Colors.deepPurple,
-      backgroundColor: Colors.white,
+      color: AppColors.primaryGreen,
+      backgroundColor: AppColors.white,
       child: ListView.separated(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 6, 16, 24),
+        physics: const AlwaysScrollableScrollPhysics(
+          parent: BouncingScrollPhysics(),
+        ),
         itemCount: filteredVisits!.length,
         separatorBuilder: (context, index) => const SizedBox(height: 12),
         itemBuilder: (context, index) {
@@ -654,209 +734,218 @@ class _ReVisitPageState extends State<ReVisitPage> {
   }
 
   Widget _buildVisitCard(Visitors visit) {
-    return Material(
-      elevation: 2,
-      borderRadius: BorderRadius.circular(16),
-      color: Colors.white,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => NewVisitFormr(
-                employeeData: widget.employeeData,
-                prefillData: visit,
-              ),
-            ),
-          );
-        },
-        child: Container(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey[100]!),
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.lightGold.withOpacity(0.5)),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryGreen.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
           ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        ],
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header Row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              // Header Row
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Expanded(
-                    child: Text(
-                      visit.businessName ?? 'No Business Name',
-                      style: GoogleFonts.poppins(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.grey[800],
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.green[50]!,
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(
-                        color: Colors.green[100]!,
-                      ),
-                    ),
-                    child: Text(
-                      'Re-visit',
-                      style: GoogleFonts.poppins(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w500,
-                        color: Colors.green[800]!,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-
-              // Visit Date and ID
-              Row(
-                children: [
-                  Icon(Icons.calendar_today, size: 14, color: Colors.grey[600]),
-                  const SizedBox(width: 4),
-                  Text(
-                    _formatDate(visit.visitDate),
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                  const Spacer(),
-                  Icon(Icons.tag, size: 14, color: Colors.grey[600]),
-                  const SizedBox(width: 4),
-                  Text(
-                    'ID: ${visit.id ?? 'N/A'}',
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-
-              // Contact Information
-              _buildInfoRow(Icons.person, visit.personName ?? 'No Name'),
-              const SizedBox(height: 4),
-              _buildInfoRow(Icons.phone, visit.mobile ?? 'No Mobile'),
-              const SizedBox(height: 4),
-              _buildInfoRow(Icons.category, 'Type: ${visit.visitFor ?? 'N/A'}'),
-
-              // Location
-              if (visit.block != null || visit.district != null) ...[
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  children: [
-                    if (visit.block != null && visit.block!.isNotEmpty)
-                      _buildLocationChip(visit.block!),
-                    if (visit.district != null && visit.district!.isNotEmpty)
-                      _buildLocationChip(visit.district!),
-                  ],
-                ),
-              ],
-
-              // Purpose
-              if (visit.purpose != null && visit.purpose!.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(
-                  'Purpose: ${visit.purpose!}',
+              Expanded(
+                child: Text(
+                  visit.businessName ?? 'No Business Name',
                   style: GoogleFonts.poppins(
-                    fontSize: 13,
-                    color: Colors.grey[700],
+                    fontSize: 15.5,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textDark,
                   ),
-                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
-              ],
-
-              // Remarks
-              if (visit.remark != null && visit.remark!.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.grey[50],
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Remarks:',
-                        style: GoogleFonts.poppins(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        visit.remark!,
-                        style: GoogleFonts.poppins(
-                          fontSize: 12,
-                          color: Colors.grey[700],
-                        ),
-                      ),
-                    ],
-                  ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryGold.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.primaryGold, width: 1),
                 ),
-              ],
-
-              // Action Buttons - View Order, Call, and Continue Re-Visit
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  // View Order Button
-                  Expanded(
-                    child: _buildActionButton(
-                      icon: Icons.shopping_cart,
-                      label: 'View Order',
-                      color: Colors.deepPurple,
-                      onPressed: () => _viewOrder(visit),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.replay_rounded, size: 12, color: AppColors.deepGold),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Re-visit',
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.deepGold,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-
-                  // Call Button
-                  Expanded(
-                    child: _buildActionButton(
-                      icon: Icons.phone,
-                      label: 'Call',
-                      color: Colors.green,
-                      onPressed: visit.mobile != null && visit.mobile!.isNotEmpty
-                          ? () => _makePhoneCall(visit.mobile!)
-                          : null,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-
-                  // Continue Re-Visit Button
-                  Expanded(
-                    child: _buildActionButton(
-                      icon: Icons.refresh,
-                      label: 'Continue',
-                      color: Colors.orange,
-                      onPressed: () => _continueReVisit(visit),
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ],
           ),
-        ),
+          const SizedBox(height: 8),
+
+          // Visit Date and ID
+          Row(
+            children: [
+              const Icon(Icons.calendar_today_rounded, size: 13, color: AppColors.textSecondary),
+              const SizedBox(width: 5),
+              Text(
+                _formatDate(visit.visitDate),
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const Spacer(),
+              const Icon(Icons.tag_rounded, size: 14, color: AppColors.textSecondary),
+              const SizedBox(width: 3),
+              Text(
+                'ID: ${visit.id ?? 'N/A'}',
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+          const Divider(height: 18, color: AppColors.lightGold),
+
+          // Contact Information
+          _buildInfoRow(Icons.person_rounded, visit.personName ?? 'No Name'),
+          const SizedBox(height: 5),
+          _buildInfoRow(Icons.phone_rounded, visit.mobile ?? 'No Mobile'),
+          const SizedBox(height: 5),
+          _buildInfoRow(Icons.category_rounded, 'Type: ${visit.visitFor ?? 'N/A'}'),
+
+          // Location chips
+          if ((visit.block != null && visit.block!.isNotEmpty) ||
+              (visit.district != null && visit.district!.isNotEmpty)) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: [
+                if (visit.block != null && visit.block!.isNotEmpty)
+                  _buildLocationChip(visit.block!, Icons.domain_rounded),
+                if (visit.district != null && visit.district!.isNotEmpty)
+                  _buildLocationChip(visit.district!, Icons.location_city_rounded),
+              ],
+            ),
+          ],
+
+          // Purpose
+          if (visit.purpose != null && visit.purpose!.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.creamBackground,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.lightGold.withOpacity(0.4)),
+              ),
+              child: Text(
+                'Purpose: ${visit.purpose!}',
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                  color: AppColors.textDark,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+
+          // Remarks
+          if (visit.remark != null && visit.remark!.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.creamBackground,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.lightGold.withOpacity(0.4)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Remarks:',
+                    style: GoogleFonts.poppins(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    visit.remark!,
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      color: AppColors.textDark,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          // Action Buttons - View Order, Call, and Continue Re-Visit
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              // View Order Button
+              Expanded(
+                child: _buildActionButton(
+                  icon: Icons.receipt_long_rounded,
+                  label: 'View Order',
+                  color: AppColors.darkGreen,
+                  onPressed: () => _viewOrder(visit),
+                ),
+              ),
+              const SizedBox(width: 8),
+
+              // Call Button
+              Expanded(
+                child: _buildActionButton(
+                  icon: Icons.phone_forwarded_rounded,
+                  label: 'Call',
+                  color: AppColors.secondaryGreen,
+                  onPressed: visit.mobile != null && visit.mobile!.isNotEmpty
+                      ? () => _makePhoneCall(visit.mobile!)
+                      : null,
+                ),
+              ),
+              const SizedBox(width: 8),
+
+              // Continue Re-Visit Button
+              Expanded(
+                child: _buildActionButton(
+                  icon: Icons.replay_rounded,
+                  label: 'Continue',
+                  color: AppColors.primaryGold,
+                  textColor: AppColors.darkGreen,
+                  iconColor: AppColors.darkGreen,
+                  onPressed: () => _continueReVisit(visit),
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
-    ),
     );
   }
 
@@ -864,27 +953,30 @@ class _ReVisitPageState extends State<ReVisitPage> {
     required IconData icon,
     required String label,
     required Color color,
+    Color textColor = AppColors.white,
+    Color iconColor = AppColors.white,
     required VoidCallback? onPressed,
   }) {
     return ElevatedButton(
       onPressed: onPressed,
       style: ElevatedButton.styleFrom(
         backgroundColor: color,
-        foregroundColor: Colors.white,
+        foregroundColor: textColor,
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         elevation: 0,
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(icon, size: 16),
-          const SizedBox(height: 2),
+          Icon(icon, size: 15, color: iconColor),
+          const SizedBox(width: 4),
           Text(
             label,
             style: GoogleFonts.poppins(
-              fontSize: 10,
-              fontWeight: FontWeight.w500,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: textColor,
             ),
             textAlign: TextAlign.center,
           ),
@@ -896,12 +988,12 @@ class _ReVisitPageState extends State<ReVisitPage> {
   Widget _buildInfoRow(IconData icon, String text) {
     return Row(
       children: [
-        Icon(icon, size: 14, color: Colors.grey[600]),
+        Icon(icon, size: 14, color: AppColors.textSecondary),
         const SizedBox(width: 8),
         Expanded(
           child: Text(
             text,
-            style: GoogleFonts.poppins(fontSize: 13, color: Colors.grey[700]),
+            style: GoogleFonts.poppins(fontSize: 12.5, color: AppColors.textDark, fontWeight: FontWeight.w500),
             overflow: TextOverflow.ellipsis,
           ),
         ),
@@ -909,16 +1001,29 @@ class _ReVisitPageState extends State<ReVisitPage> {
     );
   }
 
-  Widget _buildLocationChip(String text) {
-    return Chip(
-      label: Text(
-        text,
-        style: GoogleFonts.poppins(fontSize: 10, color: Colors.blue[800]),
+  Widget _buildLocationChip(String text, IconData icon) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.creamBackground,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: AppColors.lightGold.withOpacity(0.7)),
       ),
-      backgroundColor: Colors.blue[50],
-      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      visualDensity: VisualDensity.compact,
-      side: BorderSide.none,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 11, color: AppColors.primaryGreen),
+          const SizedBox(width: 4),
+          Text(
+            text,
+            style: GoogleFonts.poppins(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w500,
+              color: AppColors.textDark,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -927,13 +1032,13 @@ class _ReVisitPageState extends State<ReVisitPage> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          CircularProgressIndicator(
-            valueColor: AlwaysStoppedAnimation<Color>(Colors.deepPurple),
+          const CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryGreen),
           ),
           const SizedBox(height: 16),
           Text(
             'Loading Re-Visit History...',
-            style: GoogleFonts.poppins(fontSize: 16, color: Colors.grey[600]),
+            style: GoogleFonts.poppins(fontSize: 14, color: AppColors.textSecondary, fontWeight: FontWeight.w500),
           ),
         ],
       ),
@@ -947,34 +1052,34 @@ class _ReVisitPageState extends State<ReVisitPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.error_outline, size: 64, color: Colors.red[400]),
-            const SizedBox(height: 16),
+            const Icon(Icons.cloud_off_rounded, size: 56, color: AppColors.warning),
+            const SizedBox(height: 14),
             Text(
               'Unable to Load Re-Visits',
               style: GoogleFonts.poppins(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey[800],
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textDark,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Text(
               errorMessage,
-              style: GoogleFonts.poppins(fontSize: 14, color: Colors.grey[600]),
+              style: GoogleFonts.poppins(fontSize: 12.5, color: AppColors.textSecondary),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 24),
-            ElevatedButton(
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
               onPressed: _loadVisitHistory,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.deepPurple,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-              child: Text(
+              icon: const Icon(Icons.refresh_rounded, color: AppColors.white, size: 18),
+              label: Text(
                 'Try Again',
-                style: GoogleFonts.poppins(fontWeight: FontWeight.w500),
+                style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: AppColors.white),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryGreen,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
           ],
@@ -990,38 +1095,46 @@ class _ReVisitPageState extends State<ReVisitPage> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.refresh_outlined, size: 80, color: Colors.grey[400]),
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: AppColors.white,
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.lightGold.withOpacity(0.5)),
+              ),
+              child: const Icon(Icons.replay_rounded, size: 50, color: AppColors.textSecondary),
+            ),
             const SizedBox(height: 16),
             Text(
               'No Re-Visits Found',
               style: GoogleFonts.poppins(
-                fontSize: 20,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey[600],
+                fontSize: 17,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textDark,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             Text(
               _searchQuery.isNotEmpty
-                  ? 'No re-visits found for "$_searchQuery"'
+                  ? 'No re-visits found matching "$_searchQuery"'
                   : selectedFilter == 'All'
-                  ? 'Your re-visit history will appear here'
-                  : 'No re-visits found for the selected period',
-              style: GoogleFonts.poppins(fontSize: 14, color: Colors.grey[500]),
+                      ? 'Your logged re-visits will appear here'
+                      : 'No re-visits found for the selected period ($selectedFilter)',
+              style: GoogleFonts.poppins(fontSize: 12.5, color: AppColors.textSecondary),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 24),
-            ElevatedButton(
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
               onPressed: _refreshData,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.deepPurple,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-              ),
-              child: Text(
+              icon: const Icon(Icons.refresh_rounded, color: AppColors.white, size: 18),
+              label: Text(
                 'Refresh Data',
-                style: GoogleFonts.poppins(fontWeight: FontWeight.w500),
+                style: GoogleFonts.poppins(fontWeight: FontWeight.w600, color: AppColors.white),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primaryGreen,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
             ),
           ],

@@ -1,7 +1,7 @@
 import 'package:intl/intl.dart';
 
 class AsmProfileModel {
-  static const String imageBaseUrl = 'https://durvasaayurved.online';
+  static const String imageBaseUrl = 'https://durvasaayurved.com';
 
   final int? asmId;
   final String? name;

@@ -57,7 +57,7 @@ class _OrderPageFstState extends State<OrderPageFst> {
     if (widget.userId.isEmpty) return;
     try {
       final response = await http.get(
-        Uri.parse('https://durvasaayurved.online/api/GetCart/Cart?UserId=${widget.userId}'),
+        Uri.parse('https://durvasaayurved.com/api/GetCart/Cart?UserId=${widget.userId}'),
       );
       if (response.statusCode == 200) {
         final jsonResponse = jsonDecode(response.body);

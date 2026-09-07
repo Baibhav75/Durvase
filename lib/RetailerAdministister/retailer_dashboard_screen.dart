@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lottie/lottie.dart';
-
+import '../service/Retailer_service/retailer_profile_service.dart';
+import '../model/Retailer_model/retailer_profile_model.dart';
 import '../DealerAdministister/my_orders_page.dart';
+import '../OrderPage/orderPagefist.dart';
 import '../constants/app_colors.dart';
 import '../model/Retailer_model/retailer_login_model.dart';
 import '../service/Retailer_service/retailer_login_service.dart';
@@ -30,17 +32,21 @@ class _RetailerDashboardPageState extends State<RetailerDashboardPage> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   RetailerModel? _retailer;
+  RetailerProfileData? _profile;
   bool _isLoading = true;
 
   RetailerModel get _activeRetailer =>
       _retailer ??
       RetailerModel(
-        retailerId: 'RET-DA-2026-809',
-        name: 'Gupta Ayurvedic Pharmacy',
-        email: 'gupta.ayurveda@durvasa.com',
-        phone: '+91 98765 12345',
-        businessAddress: 'Shop #14, Medical Complex, Hazratganj, Lucknow, UP',
-        profile: '',
+        visiterId: 'VTR107086',
+        personName: 'Rahul Kumar',
+        businessName: 'Durvasa Ayurveda Store',
+        phone: '+91 9123456788',
+        address: 'Main Market, Sector 18',
+        photo: '',
+        empType: 'Permanent',
+        visitFor: 'Business Development',
+        purpose: 'Retailer',
       );
 
   @override
@@ -51,11 +57,28 @@ class _RetailerDashboardPageState extends State<RetailerDashboardPage> {
 
   Future<void> _loadRetailer() async {
     setState(() => _isLoading = true);
+
     try {
       final retailer = await RetailerService.getSavedRetailer();
+
+      RetailerProfileData? profile;
+
+      final currentId = retailer?.visiterId ?? retailer?.retailerId;
+      if (currentId != null && currentId.isNotEmpty) {
+        final response =
+        await RetailerProfileService.getRetailerProfile(
+          currentId,
+        );
+
+        if (response.data != null) {
+          profile = response.data;
+        }
+      }
+
       if (mounted) {
         setState(() {
           _retailer = retailer;
+          _profile = profile;
           _isLoading = false;
         });
       }
@@ -109,15 +132,20 @@ class _RetailerDashboardPageState extends State<RetailerDashboardPage> {
   @override
   Widget build(BuildContext context) {
     final currentRetailer = _activeRetailer;
-    final name = currentRetailer.name.isNotEmpty
-        ? currentRetailer.name
-        : 'Gupta Ayurvedic Pharmacy';
-    final retailerId = currentRetailer.retailerId.isNotEmpty
-        ? currentRetailer.retailerId
-        : 'RET-DA-2026-809';
+    final personName = currentRetailer.personName.isNotEmpty
+        ? currentRetailer.personName
+        : (currentRetailer.name.isNotEmpty ? currentRetailer.name : 'Rahul Kumar');
+    final businessName = currentRetailer.businessName.isNotEmpty
+        ? currentRetailer.businessName
+        : 'Durvasa Ayurveda Store';
+    final visiterId = currentRetailer.visiterId.isNotEmpty
+        ? currentRetailer.visiterId
+        : (currentRetailer.retailerId.isNotEmpty ? currentRetailer.retailerId : 'VTR107086');
     final phone = currentRetailer.phone.isNotEmpty
         ? currentRetailer.phone
-        : '+91 98765 12345';
+        : '+91 9123456788';
+    final purpose = currentRetailer.purpose.isNotEmpty ? currentRetailer.purpose : 'Retailer';
+    final photoUrl = currentRetailer.fullPhotoUrl;
 
     return Scaffold(
       key: _scaffoldKey,
@@ -199,8 +227,8 @@ class _RetailerDashboardPageState extends State<RetailerDashboardPage> {
                           Row(
                             children: [
                               Container(
-                                height: 58,
-                                width: 58,
+                                height: 60,
+                                width: 60,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   color: AppColors.white.withValues(alpha: 0.15),
@@ -209,12 +237,12 @@ class _RetailerDashboardPageState extends State<RetailerDashboardPage> {
                                     width: 2,
                                   ),
                                 ),
-                                child: currentRetailer.profile.isNotEmpty
+                                child: photoUrl.isNotEmpty
                                     ? ClipOval(
                                         child: Image.network(
-                                          currentRetailer.profile,
-                                          height: 58,
-                                          width: 58,
+                                          photoUrl,
+                                          height: 60,
+                                          width: 60,
                                           fit: BoxFit.cover,
                                           errorBuilder: (context, error, stackTrace) => const Icon(
                                             Icons.storefront_rounded,
@@ -244,7 +272,7 @@ class _RetailerDashboardPageState extends State<RetailerDashboardPage> {
                                         borderRadius: BorderRadius.circular(6),
                                       ),
                                       child: Text(
-                                        'AUTHORIZED DEALER',
+                                        'AUTHORIZED ${purpose.toUpperCase()}',
                                         style: GoogleFonts.poppins(
                                           color: AppColors.primaryGold,
                                           fontSize: 10,
@@ -255,7 +283,7 @@ class _RetailerDashboardPageState extends State<RetailerDashboardPage> {
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      name,
+                                      personName,
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: GoogleFonts.poppins(
@@ -264,10 +292,21 @@ class _RetailerDashboardPageState extends State<RetailerDashboardPage> {
                                         fontWeight: FontWeight.w700,
                                       ),
                                     ),
+                                    if (businessName.isNotEmpty && businessName != personName)
+                                      Text(
+                                        businessName,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: GoogleFonts.poppins(
+                                          color: AppColors.cream.withValues(alpha: 0.9),
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
                                     Text(
                                       'Durvasa Ayurved Partner',
                                       style: GoogleFonts.poppins(
-                                        color: AppColors.cream.withValues(alpha: 0.85),
+                                        color: AppColors.cream.withValues(alpha: 0.75),
                                         fontSize: 11,
                                       ),
                                     ),
@@ -278,15 +317,92 @@ class _RetailerDashboardPageState extends State<RetailerDashboardPage> {
                           ),
                           const SizedBox(height: 12),
                           Divider(color: AppColors.white.withValues(alpha: 0.2)),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            alignment: WrapAlignment.center,
-                            children: [
-                              _buildInfoChip(Icons.tag_rounded, 'ID: $retailerId'),
-                              _buildInfoChip(Icons.phone_rounded, phone),
-                            ],
+
+// Work Area & Territory
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: AppColors.white.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: AppColors.primaryGold.withValues(alpha: 0.25),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.map_outlined,
+                                      size: 16,
+                                      color: AppColors.primaryGold,
+                                    ),
+                                    const SizedBox(width: 7),
+                                    Text(
+                                      'Visiter Details & Territory',
+                                      style: GoogleFonts.poppins(
+                                        color: AppColors.primaryGold,
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+
+                                const SizedBox(height: 9),
+
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  alignment: WrapAlignment.center,
+                                  children: [
+                                    _buildInfoChip(
+                                      Icons.tag_rounded,
+                                      'Visiter ID: $visiterId',
+                                    ),
+                                    _buildInfoChip(
+                                      Icons.phone_rounded,
+                                      phone,
+                                    ),
+                                    if (currentRetailer.empType.isNotEmpty)
+                                      _buildInfoChip(
+                                        Icons.badge_outlined,
+                                        'Type: ${currentRetailer.empType}',
+                                      ),
+                                    if (currentRetailer.purpose.isNotEmpty)
+                                      _buildInfoChip(
+                                        Icons.category_outlined,
+                                        currentRetailer.purpose,
+                                      ),
+                                    if (currentRetailer.visitFor.isNotEmpty)
+                                      _buildInfoChip(
+                                        Icons.work_outline_rounded,
+                                        currentRetailer.visitFor,
+                                      ),
+
+                                    if (_profile?.district?.isNotEmpty == true)
+                                      _buildInfoChip(
+                                        Icons.location_city_outlined,
+                                        _profile!.district!,
+                                      ),
+
+                                    if (_profile?.block?.isNotEmpty == true)
+                                      _buildInfoChip(
+                                        Icons.domain_outlined,
+                                        _profile!.block!,
+                                      ),
+
+                                    if (_profile?.state?.isNotEmpty == true)
+                                      _buildInfoChip(
+                                        Icons.map_outlined,
+                                        _profile!.state!,
+                                      ),
+                                  ],
+                                ),
+                              ],
+                            ),
                           ),
                         ],
                       ),
@@ -443,16 +559,16 @@ class _RetailerDashboardPageState extends State<RetailerDashboardPage> {
                         ),
                         _AnimatedDashboardCard(
                           icon: Icons.receipt_long_outlined,
-                          title: 'My Orders',
+                          title: 'Orders History',
                           subtitle: 'Order History & Status',
                           onTap: () =>
-                              _navigateTo(MyOrdersPage(idType: 'Retailer', idValue: retailerId,)),//
+                              _navigateTo(MyOrdersPage(idType: 'Retailer', idValue: visiterId)),
                         ),
                         _AnimatedDashboardCard(
                           icon: Icons.receipt_long_outlined,
-                          title: 'My Orders',
+                          title: 'My Order',
                           subtitle: 'Order History & Status',
-                          onTap: () => _navigateTo(RetailerOrdersPage(retailer: currentRetailer)),
+                          onTap: () => _navigateTo(OrderPageFst(userId: visiterId)),
                         ),
                         _AnimatedDashboardCard(
                           icon: Icons.account_balance_wallet_outlined,

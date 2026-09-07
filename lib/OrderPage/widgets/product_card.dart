@@ -36,7 +36,7 @@ class _ProductCardState extends State<ProductCard> {
 
     try {
       final url = Uri.parse(
-        'https://durvasaayurved.online/api/AddToCart/AddToCart?ProductID=${widget.product.productId}&UserID=${widget.userId}&Qty=1',
+        'https://durvasaayurved.com/api/AddToCart/AddToCart?ProductID=${widget.product.productId}&UserID=${widget.userId}&Qty=1',
       );
 
       final response = await http.post(url);

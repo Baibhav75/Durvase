@@ -37,5 +37,5 @@ class BannerItem {
   }
 
   String get imageUrl =>
-      "https://durvasaayurved.online$imagePath";
+      "https://durvasaayurved.com$imagePath";
 }

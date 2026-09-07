@@ -207,27 +207,29 @@ class SessionManager {
       final prefs = await SharedPreferences.getInstance();
 
       // Clear all session-specific values
-      await prefs.remove(_prefsKey);
-      await prefs.remove(_userIdKey);
-      await prefs.remove(_legacyUserIdKey);
-      await prefs.remove(_empIdKey);
-      await prefs.remove(_nameKey);
-      await prefs.remove(_emailKey);
-      await prefs.remove(_mobileKey);
-      await prefs.remove(_employeeTypeKey);
-
-      await prefs.setBool(_isLoggedInKey, false);
+      await Future.wait([
+        prefs.remove(_prefsKey),
+        prefs.remove(_userIdKey),
+        prefs.remove(_legacyUserIdKey),
+        prefs.remove(_empIdKey),
+        prefs.remove('asm_id'),
+        prefs.remove(_nameKey),
+        prefs.remove(_emailKey),
+        prefs.remove(_mobileKey),
+        prefs.remove(_employeeTypeKey),
+        prefs.remove(_retailerIdKey),
+        prefs.remove(_isLoggedInKey),
+        prefs.setBool(_isLoggedInKey, false),
+      ]);
 
       // Clear in-memory profile cache
       ApiService.clearProfileCache();
 
       debugPrint('================================');
-      debugPrint('✅ LOGOUT COMPLETE: Session cleared');
-      debugPrint('is_logged_in: ${prefs.getBool(_isLoggedInKey)}');
+      debugPrint('✅ LOGOUT COMPLETE: All Sessions & ASM Cleared');
       debugPrint('================================');
     } catch (e) {
-      debugPrint('Logout error: $e');
-      rethrow;
+      debugPrint('Logout error in SessionManager: $e');
     }
   }
 
@@ -361,14 +363,14 @@ class SessionManager {
     return prefs.getString(_employeeTypeKey);
   }
 
-  // --- Retailer ID Helpers ---
+  // --- Retailer / Visiter ID Helpers ---
 
-  /// Save Retailer ID to SharedPreferences
+  /// Save Retailer/Visiter ID to SharedPreferences
   static Future<bool> saveRetailerId(String retailerId) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final success = await prefs.setString(_retailerIdKey, retailerId);
-      debugPrint('✅ Retailer ID saved in SessionManager: $retailerId');
+      debugPrint('✅ Retailer/Visiter ID saved in SessionManager: $retailerId');
       return success;
     } catch (e) {
       debugPrint('❌ Error saving retailer ID in SessionManager: $e');
@@ -376,7 +378,10 @@ class SessionManager {
     }
   }
 
-  /// Retrieve stored Retailer ID from SharedPreferences
+  /// Save Visiter ID
+  static Future<bool> saveVisiterId(String visiterId) => saveRetailerId(visiterId);
+
+  /// Retrieve stored Retailer/Visiter ID from SharedPreferences
   static Future<String?> getRetailerId() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -386,6 +391,9 @@ class SessionManager {
       return null;
     }
   }
+
+  /// Retrieve stored Visiter ID
+  static Future<String?> getVisiterId() => getRetailerId();
 
   /// Remove stored Retailer ID from SharedPreferences
   static Future<bool> clearRetailerId() async {
@@ -397,4 +405,8 @@ class SessionManager {
       return false;
     }
   }
+
+  /// Clear Visiter ID
+  static Future<bool> clearVisiterId() => clearRetailerId();
 }
+

@@ -8,6 +8,11 @@ import '../service/Dealer_service/dealer_session_manager.dart';
 import 'dealer_profile_screen.dart';
 import 'dealer_place_order_page.dart';
 import 'my_orders_page.dart';
+import 'dealer_payments_page.dart';
+import 'dealer_invoices_page.dart';
+import 'dealer_products_page.dart';
+import 'dealer_track_order_page.dart';
+import 'dealer_support_page.dart';
 
 class DealerDrawer extends StatefulWidget {
   final DealerModel dealer;
@@ -69,24 +74,30 @@ class _DealerDrawerState extends State<DealerDrawer> {
   // LOGOUT
   // ============================================================
 
-  Future<void> _logout() async {
+  Future<void> _logout(BuildContext navContext) async {
     try {
       await DealerSessionManager.logout();
 
-      if (!mounted) return;
-
-      Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+      Navigator.of(navContext, rootNavigator: true).pushAndRemoveUntil(
         MaterialPageRoute(
           builder: (_) => const HomePage(),
         ),
-            (_) => false,
+        (_) => false,
       );
     } catch (e) {
       debugPrint('Dealer logout error: $e');
+      Navigator.of(navContext, rootNavigator: true).pushAndRemoveUntil(
+        MaterialPageRoute(
+          builder: (_) => const HomePage(),
+        ),
+        (_) => false,
+      );
     }
   }
 
   void _showLogoutDialog() {
+    final navContext = Navigator.of(context, rootNavigator: true).context;
+
     showDialog(
       context: context,
       builder: (dialogContext) {
@@ -121,7 +132,7 @@ class _DealerDrawerState extends State<DealerDrawer> {
             TextButton(
               onPressed: () {
                 Navigator.pop(dialogContext);
-                _logout();
+                _logout(navContext);
               },
               child: Text(
                 'Logout',
@@ -261,6 +272,7 @@ class _DealerDrawerState extends State<DealerDrawer> {
   }
 
   Widget _profileImage() {
+    final photoUrl = widget.dealer.resolvedImageUrl;
     return Container(
       decoration: BoxDecoration(
         shape: BoxShape.circle,
@@ -269,14 +281,28 @@ class _DealerDrawerState extends State<DealerDrawer> {
           width: 2,
         ),
       ),
-      child: const CircleAvatar(
+      child: CircleAvatar(
         radius: 28,
         backgroundColor: AppColors.white,
-        child: Icon(
-          Icons.storefront,
-          color: AppColors.primaryGreen,
-          size: 28,
-        ),
+        child: photoUrl.isNotEmpty
+            ? ClipOval(
+                child: Image.network(
+                  photoUrl,
+                  width: 56,
+                  height: 56,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const Icon(
+                    Icons.storefront,
+                    color: AppColors.primaryGreen,
+                    size: 28,
+                  ),
+                ),
+              )
+            : const Icon(
+                Icons.storefront,
+                color: AppColors.primaryGreen,
+                size: 28,
+              ),
       ),
     );
   }
@@ -284,7 +310,6 @@ class _DealerDrawerState extends State<DealerDrawer> {
   Widget _idCardHeaderButton() {
     return OutlinedButton.icon(
       onPressed: () {
-        Navigator.pop(context);
         _showComingSoon('Dealer ID Card');
         // _goTo(DealerIdCardScreen(dealer: widget.dealer));
       },
@@ -387,47 +412,46 @@ class _DealerDrawerState extends State<DealerDrawer> {
             _drawerItem(
               icon: Icons.receipt_long_outlined,
               title: 'My Orders',
-              onTap: () => _goTo(MyOrdersPage(idType: 'Dealer', idValue: widget.dealer.dealerId ?? '')),
+              onTap: () => _goTo(MyOrdersPage(idType: 'Dealer', idValue: widget.dealer.dealerId)),
             ),
 
             // Track Order
             _drawerItem(
               icon: Icons.local_shipping_outlined,
               title: 'Track Order',
-              onTap: () => _showComingSoon('Track Order'),
-              // onTap: () => _goTo(DealerTrackOrderPage(dealer: widget.dealer)),
+              onTap: () => _goTo(DealerTrackOrderPage(dealerId: widget.dealer.dealerId)),
             ),
 
             // Payments
             _drawerItem(
               icon: Icons.account_balance_wallet_outlined,
               title: 'Payments',
-              onTap: () => _showComingSoon('Payments'),
-              // onTap: () => _goTo(DealerPaymentsPage(dealer: widget.dealer)),
+              onTap: () => _goTo(DealerPaymentsPage(dealerId: widget.dealer.dealerId)),
             ),
 
             // Invoices
             _drawerItem(
               icon: Icons.description_outlined,
               title: 'Invoices',
-              onTap: () => _showComingSoon('Invoices'),
-              // onTap: () => _goTo(DealerInvoicesPage(dealer: widget.dealer)),
+              onTap: () => _goTo(DealerInvoicesPage(dealerId: widget.dealer.dealerId)),
             ),
 
             // Products
             _drawerItem(
               icon: Icons.inventory_2_outlined,
               title: 'Products',
-              onTap: () => _showComingSoon('Products'),
-              // onTap: () => _goTo(DealerProductsPage(dealer: widget.dealer)),
+              onTap: () => _goTo(DealerProductsPage(dealerId: widget.dealer.dealerId)),
             ),
 
             // Support
             _drawerItem(
               icon: Icons.support_agent_outlined,
               title: 'Support',
-              onTap: () => _showComingSoon('Support'),
-              // onTap: () => _goTo(DealerSupportPage(dealer: widget.dealer)),
+              onTap: () => _goTo(DealerSupportPage(
+                dealerId: widget.dealer.dealerId,
+                dealerName: widget.dealer.name,
+                dealerPhone: widget.dealer.phone,
+              )),
             ),
 
             Divider(

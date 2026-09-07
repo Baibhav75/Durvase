@@ -7,6 +7,7 @@ import '../../model/TodoModel.dart';
 import '../../model/mr_work_report_model.dart';
 import '../../service/api_service.dart';
 import '../../service/session_manager.dart';
+import 'mr_work_report_history_page.dart';
 
 class MrWorkReportPage extends StatefulWidget {
   final TodoModel? userData;
@@ -694,6 +695,21 @@ class _MrWorkReportPageState extends State<MrWorkReportPage> {
         ),
         centerTitle: true,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.history_rounded, color: AppColors.lightGold),
+            tooltip: 'Report History',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => MRWorkReportHistoryPage(
+                    userData: widget.userData,
+                    empId: empId,
+                  ),
+                ),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.cleaning_services_rounded, color: AppColors.primaryGold),
             tooltip: 'Clear Form',

@@ -32,10 +32,9 @@ class _EditRetailerProfileSheetState extends State<EditRetailerProfileSheet> {
   final ImagePicker _picker = ImagePicker();
 
   late TextEditingController _nameController;
-  late TextEditingController _fatherNameController;
+  late TextEditingController _businessNameController;
   late TextEditingController _mobileController;
   late TextEditingController _mobileAltController;
-  late TextEditingController _emergenceNoController;
   late TextEditingController _emailController;
   late TextEditingController _passwordController;
   late TextEditingController _addressController;
@@ -46,7 +45,19 @@ class _EditRetailerProfileSheetState extends State<EditRetailerProfileSheet> {
   late TextEditingController _blockController;
   late TextEditingController _billedGroupController;
 
+  // Visiter / MR specific controllers
+  late TextEditingController _empNameController;
+  late TextEditingController _empMobileController;
+  late TextEditingController _employeeIdController;
+  late TextEditingController _empTypeController;
+  late TextEditingController _visitForController;
+  late TextEditingController _purposeController;
+  late TextEditingController _remarkController;
+  late TextEditingController _fatherNameController;
+  late TextEditingController _emergenceNoController;
+
   String _selectedGender = 'Male';
+  String _selectedRevisited = 'No';
   File? _newProfileImage;
   String? _base64Image;
   bool _obscurePassword = true;
@@ -62,8 +73,8 @@ class _EditRetailerProfileSheetState extends State<EditRetailerProfileSheet> {
 
   void _initControllers() {
     final p = widget.profile;
-    _nameController = TextEditingController(text: p.name ?? '');
-    _fatherNameController = TextEditingController(text: p.fatherName ?? '');
+    _nameController = TextEditingController(text: p.personName ?? p.name ?? '');
+    _businessNameController = TextEditingController(text: p.businessName ?? '');
     _mobileController = TextEditingController(text: p.mobile ?? '');
     _mobileAltController = TextEditingController(text: p.mobileAlt ?? '');
     _emergenceNoController = TextEditingController(text: p.emergenceNo ?? '');
@@ -77,6 +88,22 @@ class _EditRetailerProfileSheetState extends State<EditRetailerProfileSheet> {
     _blockController = TextEditingController(text: p.block ?? '');
     _billedGroupController = TextEditingController(text: p.billedGroup ?? '');
 
+    _empNameController = TextEditingController(text: p.empName ?? '');
+    _empMobileController = TextEditingController(text: p.empMobile ?? '');
+    _employeeIdController = TextEditingController(text: p.employeeId ?? '');
+    _empTypeController = TextEditingController(text: p.empType ?? 'Permanent');
+    _visitForController = TextEditingController(text: p.visitFor ?? 'Business Development');
+    _purposeController = TextEditingController(text: p.purpose ?? 'Retailer');
+    _remarkController = TextEditingController(text: p.remark ?? '');
+    _fatherNameController = TextEditingController(text: p.fatherName ?? '');
+
+    if (p.reVisited != null && p.reVisited!.trim().isNotEmpty) {
+      final r = p.reVisited!.trim();
+      if (['Yes', 'No'].contains(r)) {
+        _selectedRevisited = r;
+      }
+    }
+
     if (p.gender != null && p.gender!.trim().isNotEmpty) {
       final g = p.gender!.trim();
       if (['Male', 'Female', 'Other'].contains(g)) {
@@ -87,7 +114,10 @@ class _EditRetailerProfileSheetState extends State<EditRetailerProfileSheet> {
 
   Future<void> _loadRetailerId() async {
     // 1. First priority: SessionManager
-    String? id = await SessionManager.getRetailerId();
+    String? id = await SessionManager.getVisiterId();
+    if (id == null || id.isEmpty) {
+      id = await SessionManager.getRetailerId();
+    }
 
     // 2. Second priority: RetailerSessionManager
     if (id == null || id.isEmpty) {
@@ -96,7 +126,7 @@ class _EditRetailerProfileSheetState extends State<EditRetailerProfileSheet> {
 
     // 3. Fallback: profile model
     if (id == null || id.isEmpty) {
-      id = widget.profile.retailerId;
+      id = widget.profile.visiterId ?? widget.profile.retailerId;
     }
 
     if (mounted) {
@@ -109,7 +139,7 @@ class _EditRetailerProfileSheetState extends State<EditRetailerProfileSheet> {
   @override
   void dispose() {
     _nameController.dispose();
-    _fatherNameController.dispose();
+    _businessNameController.dispose();
     _mobileController.dispose();
     _mobileAltController.dispose();
     _emergenceNoController.dispose();
@@ -122,6 +152,14 @@ class _EditRetailerProfileSheetState extends State<EditRetailerProfileSheet> {
     _districtController.dispose();
     _blockController.dispose();
     _billedGroupController.dispose();
+    _empNameController.dispose();
+    _empMobileController.dispose();
+    _employeeIdController.dispose();
+    _empTypeController.dispose();
+    _visitForController.dispose();
+    _purposeController.dispose();
+    _remarkController.dispose();
+    _fatherNameController.dispose();
     super.dispose();
   }
 
@@ -193,11 +231,11 @@ class _EditRetailerProfileSheetState extends State<EditRetailerProfileSheet> {
   Future<void> _submitForm() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final retailerId = _resolvedRetailerId ?? widget.profile.retailerId ?? '';
+    final retailerId = _resolvedRetailerId ?? widget.profile.visiterId ?? widget.profile.retailerId ?? '';
     if (retailerId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Error: Retailer ID is missing from session.'),
+          content: Text('Error: Visiter ID is missing from session.'),
           backgroundColor: AppColors.error,
         ),
       );
@@ -208,27 +246,36 @@ class _EditRetailerProfileSheetState extends State<EditRetailerProfileSheet> {
 
     try {
       final model = EditRetailerModel(
-        retailerId: retailerId,
-        status: widget.profile.status ?? 'Active',
-        retailerCode: widget.profile.retailerCode,
-        password: _passwordController.text.trim().isNotEmpty ? _passwordController.text.trim() : null,
-        joinDate: widget.profile.joinDate,
-        gender: _selectedGender,
-        name: _nameController.text.trim(),
-        fatherName: _fatherNameController.text.trim(),
-        address: _addressController.text.trim(),
+        id: widget.profile.id,
+        visiterId: retailerId,
+        personName: _nameController.text.trim(),
+        businessName: _businessNameController.text.trim(),
         mobile: _mobileController.text.trim(),
-        mobileAlt: _mobileAltController.text.trim(),
-        email: _emailController.text.trim(),
-        postOffice: _postOfficeController.text.trim(),
+        address: _addressController.text.trim(),
         country: _countryController.text.trim(),
         state: _stateController.text.trim(),
         district: _districtController.text.trim(),
         block: _blockController.text.trim(),
-        employeeType: widget.profile.employeeType ?? 'Retailer',
-        image: _base64Image ?? widget.profile.image,
+        purpose: _purposeController.text.trim().isNotEmpty ? _purposeController.text.trim() : 'Retailer',
+        empType: _empTypeController.text.trim().isNotEmpty ? _empTypeController.text.trim() : 'Permanent',
+        visitFor: _visitForController.text.trim().isNotEmpty ? _visitForController.text.trim() : 'Business Development',
+        empName: _empNameController.text.trim(),
+        empMobile: _empMobileController.text.trim(),
+        employeeId: _employeeIdController.text.trim(),
+        reVisited: _selectedRevisited,
+        visitDate: widget.profile.visitDate,
+        revisitDate: widget.profile.revisitDate,
+        remark: _remarkController.text.trim(),
+        password: _passwordController.text.trim().isNotEmpty ? _passwordController.text.trim() : null,
+        photo: _base64Image ?? widget.profile.photo,
+        // Legacy fields
+        email: _emailController.text.trim(),
+        postOffice: _postOfficeController.text.trim(),
+        fatherName: _fatherNameController.text.trim(),
+        mobileAlt: _mobileAltController.text.trim(),
         emergenceNo: _emergenceNoController.text.trim(),
         billedGroup: _billedGroupController.text.trim(),
+        status: widget.profile.status ?? 'Active',
       );
 
       final response = await RetailerProfileService.editRetailerProfile(model);
@@ -236,19 +283,24 @@ class _EditRetailerProfileSheetState extends State<EditRetailerProfileSheet> {
       debugPrint('Edit Retailer Profile Response: ${response.message}');
 
       // Sync Session Manager & RetailerSessionManager
+      await SessionManager.saveVisiterId(retailerId);
       await SessionManager.saveRetailerId(retailerId);
 
       final savedRetailer = await RetailerSessionManager.getLoginData();
       if (savedRetailer != null) {
         final updatedRetailer = RetailerModel(
-          retailerId: retailerId,
-          name: _nameController.text.trim(),
+          visiterId: retailerId,
+          personName: _nameController.text.trim(),
+          businessName: _businessNameController.text.trim(),
           email: _emailController.text.trim(),
           phone: _mobileController.text.trim(),
-          businessAddress: _addressController.text.trim(),
-          profile: _newProfileImage != null
+          address: _addressController.text.trim(),
+          purpose: _purposeController.text.trim(),
+          empType: _empTypeController.text.trim(),
+          visitFor: _visitForController.text.trim(),
+          photo: _newProfileImage != null
               ? _newProfileImage!.path
-              : (widget.profile.image ?? savedRetailer.profile),
+              : (widget.profile.photo ?? savedRetailer.photo),
         );
         await RetailerSessionManager.saveLoginData(updatedRetailer);
       }
@@ -354,7 +406,7 @@ class _EditRetailerProfileSheetState extends State<EditRetailerProfileSheet> {
                     _buildAvatarSection(),
                     const SizedBox(height: 18),
 
-                    // Retailer ID Display Card
+                    // Visiter ID Display Card
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                       decoration: BoxDecoration(
@@ -370,7 +422,7 @@ class _EditRetailerProfileSheetState extends State<EditRetailerProfileSheet> {
                               const Icon(Icons.fingerprint_rounded, color: AppColors.primaryGreen, size: 20),
                               const SizedBox(width: 8),
                               Text(
-                                'Retailer ID (Session)',
+                                'Visiter ID',
                                 style: GoogleFonts.poppins(
                                   fontSize: 12.5,
                                   fontWeight: FontWeight.w600,
@@ -380,7 +432,7 @@ class _EditRetailerProfileSheetState extends State<EditRetailerProfileSheet> {
                             ],
                           ),
                           Text(
-                            _resolvedRetailerId ?? widget.profile.retailerId ?? 'Loading...',
+                            _resolvedRetailerId ?? widget.profile.visiterId ?? widget.profile.retailerId ?? 'Loading...',
                             style: GoogleFonts.poppins(
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
@@ -392,17 +444,31 @@ class _EditRetailerProfileSheetState extends State<EditRetailerProfileSheet> {
                     ),
                     const SizedBox(height: 16),
 
-                    // 1. Personal Details Card
+                    // 1. Personal & Business Details Card
                     _buildFormCard(
-                      title: 'Personal Information',
+                      title: 'Personal & Business Details',
                       icon: Icons.person_outline_rounded,
                       children: [
                         _buildInputField(
                           controller: _nameController,
-                          label: 'Full Name *',
+                          label: 'Person Name *',
                           hint: 'Enter your full name',
                           icon: Icons.person_rounded,
-                          validator: (val) => val == null || val.trim().isEmpty ? 'Name is required' : null,
+                          validator: (val) => val == null || val.trim().isEmpty ? 'Person name is required' : null,
+                        ),
+                        const SizedBox(height: 12),
+                        _buildInputField(
+                          controller: _businessNameController,
+                          label: 'Business / Store Name',
+                          hint: 'e.g. Durvasa Ayurveda Store',
+                          icon: Icons.storefront_rounded,
+                        ),
+                        const SizedBox(height: 12),
+                        _buildInputField(
+                          controller: _purposeController,
+                          label: 'Purpose / Role',
+                          hint: 'e.g. Retailer',
+                          icon: Icons.category_outlined,
                         ),
                         const SizedBox(height: 12),
                         _buildInputField(
@@ -477,25 +543,63 @@ class _EditRetailerProfileSheetState extends State<EditRetailerProfileSheet> {
                     ),
                     const SizedBox(height: 14),
 
-                    // 3. Security Details Card
+                    // 3. Representative & Visit Information Card
                     _buildFormCard(
-                      title: 'Account Security',
-                      icon: Icons.lock_outline_rounded,
+                      title: 'Representative & Visit Details',
+                      icon: Icons.badge_outlined,
                       children: [
                         _buildInputField(
-                          controller: _passwordController,
-                          label: 'New Password (Optional)',
-                          hint: 'Leave blank to keep existing password',
-                          icon: Icons.lock_outline_rounded,
-                          obscureText: _obscurePassword,
-                          suffixIcon: IconButton(
-                            icon: Icon(
-                              _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                              color: AppColors.textSecondary,
-                              size: 20,
+                          controller: _empNameController,
+                          label: 'Assigned MR / Officer Name',
+                          hint: 'e.g. Amit Sharma',
+                          icon: Icons.support_agent_rounded,
+                        ),
+                        const SizedBox(height: 12),
+                        _buildInputField(
+                          controller: _empMobileController,
+                          label: 'MR Contact Number',
+                          hint: 'e.g. 9123456788',
+                          icon: Icons.phone_in_talk_rounded,
+                          keyboardType: TextInputType.phone,
+                        ),
+                        const SizedBox(height: 12),
+                        _buildInputField(
+                          controller: _employeeIdController,
+                          label: 'MR Employee ID',
+                          hint: 'e.g. EMP348109',
+                          icon: Icons.badge_rounded,
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _buildInputField(
+                                controller: _empTypeController,
+                                label: 'Employment Type',
+                                hint: 'e.g. Permanent',
+                                icon: Icons.work_history_outlined,
+                              ),
                             ),
-                            onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                          ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: _buildInputField(
+                                controller: _visitForController,
+                                label: 'Visit For',
+                                hint: 'e.g. Business Development',
+                                icon: Icons.business_center_outlined,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        _buildRevisitedDropdown(),
+                        const SizedBox(height: 12),
+                        _buildInputField(
+                          controller: _remarkController,
+                          label: 'Remark / Notes',
+                          hint: 'e.g. Profile updated successfully',
+                          icon: Icons.notes_rounded,
+                          maxLines: 2,
                         ),
                       ],
                     ),
@@ -563,6 +667,30 @@ class _EditRetailerProfileSheetState extends State<EditRetailerProfileSheet> {
                           label: 'Country',
                           hint: 'India',
                           icon: Icons.flag_outlined,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+
+                    // 5. Security Details Card
+                    _buildFormCard(
+                      title: 'Account Security',
+                      icon: Icons.lock_outline_rounded,
+                      children: [
+                        _buildInputField(
+                          controller: _passwordController,
+                          label: 'New Password (Optional)',
+                          hint: 'Leave blank to keep existing password',
+                          icon: Icons.lock_outline_rounded,
+                          obscureText: _obscurePassword,
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                              color: AppColors.textSecondary,
+                              size: 20,
+                            ),
+                            onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                          ),
                         ),
                       ],
                     ),
@@ -873,4 +1001,54 @@ class _EditRetailerProfileSheetState extends State<EditRetailerProfileSheet> {
       ],
     );
   }
+
+  // ============================================================
+  // RE-VISITED DROPDOWN
+  // ============================================================
+  Widget _buildRevisitedDropdown() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Re-Visited Status',
+          style: GoogleFonts.poppins(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: AppColors.textDark,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: AppColors.creamBackground.withValues(alpha: 0.5),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.lightGold.withValues(alpha: 0.5)),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: _selectedRevisited,
+              isExpanded: true,
+              icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.primaryGold),
+              items: ['No', 'Yes'].map((String value) {
+                return DropdownMenuItem<String>(
+                  value: value,
+                  child: Text(
+                    value,
+                    style: GoogleFonts.poppins(fontSize: 13.5, color: AppColors.textDark),
+                  ),
+                );
+              }).toList(),
+              onChanged: (newValue) {
+                if (newValue != null) {
+                  setState(() => _selectedRevisited = newValue);
+                }
+              },
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
+

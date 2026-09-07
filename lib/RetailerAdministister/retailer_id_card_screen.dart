@@ -11,10 +11,22 @@ class RetailerIdCardScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final name = retailer.name.isNotEmpty ? retailer.name : 'Gupta Ayurvedic Pharmacy';
-    final retailerId = retailer.retailerId.isNotEmpty ? retailer.retailerId : 'RET-DA-2026-809';
-    final phone = retailer.phone.isNotEmpty ? retailer.phone : '+91 98765 12345';
-    final address = retailer.businessAddress.isNotEmpty ? retailer.businessAddress : 'Hazratganj, Lucknow, UP';
+    final personName = retailer.personName.isNotEmpty
+        ? retailer.personName
+        : (retailer.name.isNotEmpty ? retailer.name : 'Rahul Kumar');
+    final businessName = retailer.businessName.isNotEmpty
+        ? retailer.businessName
+        : 'Durvasa Ayurveda Store';
+    final visiterId = retailer.visiterId.isNotEmpty
+        ? retailer.visiterId
+        : (retailer.retailerId.isNotEmpty ? retailer.retailerId : 'VTR107086');
+    final phone = retailer.phone.isNotEmpty ? retailer.phone : '+91 9123456788';
+    final address = retailer.address.isNotEmpty
+        ? retailer.address
+        : (retailer.businessAddress.isNotEmpty ? retailer.businessAddress : 'Main Market, Sector 18');
+    final photoUrl = retailer.fullPhotoUrl;
+    final empType = retailer.empType.isNotEmpty ? retailer.empType : 'Permanent';
+    final purpose = retailer.purpose.isNotEmpty ? retailer.purpose : 'Retailer';
 
     return Scaffold(
       backgroundColor: AppColors.creamBackground,
@@ -90,7 +102,7 @@ class RetailerIdCardScreen extends StatelessWidget {
                                   ),
                                 ),
                                 Text(
-                                  'AUTHORIZED RETAIL PARTNER',
+                                  'AUTHORIZED $purpose'.toUpperCase(),
                                   style: GoogleFonts.poppins(
                                     fontSize: 9,
                                     fontWeight: FontWeight.w600,
@@ -125,26 +137,30 @@ class RetailerIdCardScreen extends StatelessWidget {
                       child: Column(
                         children: [
                           Container(
-                            height: 72,
-                            width: 72,
+                            height: 78,
+                            width: 78,
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: AppColors.creamBackground,
                               border: Border.all(color: AppColors.primaryGold, width: 2),
                             ),
-                            child: retailer.profile.isNotEmpty
+                            child: photoUrl.isNotEmpty
                                 ? ClipOval(
                                     child: Image.network(
-                                      retailer.profile,
+                                      photoUrl,
                                       fit: BoxFit.cover,
-                                      errorBuilder: (_, __, ___) => const Icon(Icons.storefront_rounded, color: AppColors.primaryGreen, size: 36),
+                                      errorBuilder: (_, __, ___) => const Icon(
+                                        Icons.storefront_rounded,
+                                        color: AppColors.primaryGreen,
+                                        size: 38,
+                                      ),
                                     ),
                                   )
-                                : const Icon(Icons.storefront_rounded, color: AppColors.primaryGreen, size: 36),
+                                : const Icon(Icons.storefront_rounded, color: AppColors.primaryGreen, size: 38),
                           ),
                           const SizedBox(height: 12),
                           Text(
-                            name,
+                            personName,
                             textAlign: TextAlign.center,
                             style: GoogleFonts.poppins(
                               fontSize: 17,
@@ -152,23 +168,44 @@ class RetailerIdCardScreen extends StatelessWidget {
                               color: AppColors.primaryGreen,
                             ),
                           ),
-                          Text(
-                            'Retailer ID: $retailerId',
-                            style: GoogleFonts.poppins(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.deepGold,
+                          if (businessName.isNotEmpty && businessName != personName)
+                            Text(
+                              businessName,
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.poppins(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          const SizedBox(height: 4),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: AppColors.primaryGreen.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              'Visiter ID: $visiterId',
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.deepGold,
+                              ),
                             ),
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 14),
                           const Divider(),
                           const SizedBox(height: 8),
 
                           _idRow('Contact:', phone),
                           _idRow('Location:', address),
-                          _idRow('DL No.:', 'UP-LKO-DL-2024-99182'),
-                          _idRow('GSTIN:', '09AABCD1234E1Z5'),
-                          _idRow('Valid Thru:', '31 Dec 2027'),
+                          _idRow('Role / Purpose:', purpose),
+                          _idRow('Type:', empType),
+                          if (retailer.visitFor.isNotEmpty)
+                            _idRow('Visit For:', retailer.visitFor),
+                          _idRow('Status:', 'Active Partner'),
+
 
                           const SizedBox(height: 14),
                           Container(

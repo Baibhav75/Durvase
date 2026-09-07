@@ -36,7 +36,7 @@ class _AttendanceHistoryPageState extends State<AsmAttendanceHistoryPage> {
   String? _errorMessage;
   String _selectedFilter = 'ALL'; // 'ALL', 'COMPLETED', 'CHECKED_IN'
 
-  static const String _imageBaseUrl = 'https://durvasaayurved.online';
+  static const String _imageBaseUrl = 'https://durvasaayurved.com';
 
   int get _resolvedAsmId {
     final rawId = widget.userData?.asmId ??

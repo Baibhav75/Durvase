@@ -1,13 +1,12 @@
-// service/visitor_service.dart
-
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
 
 class VisitorService {
-  static const String baseUrl = 'https://durvasaayurved.online/api';
+  static const String baseUrl = 'https://durvasaayurved.com/api';
   static const int timeoutSeconds = 30;
 
-  // Method to submit visitor data
+  // Submit visitor data as multipart/form-data
   static Future<Map<String, dynamic>> submitVisitorData({
     required String empType,
     required String empMobile,
@@ -25,98 +24,205 @@ class VisitorService {
     required String purpose,
     required String reVisited,
     required String remark,
+
+    // Password and Visit Date
+    required String password,
+    required String visitDate,
+
+    File? imageFile,
     String? photoBase64,
+    String? photo,
     String? reVisitDate,
+    String? visiterId,
+    String? employeeId,
+    String? message,
   }) async {
     try {
-      // Prepare request body
-      final Map<String, dynamic> requestBody = {
-        "Emp_Type": empType,
-        "Emp_Mobile": empMobile,
-        "Emp_Name": empName,
-        "Emp_Id": empId,
-        "Visit_for": visitFor,
-        "Country": country,
-        "State": state,
-        "District": district,
-        "Block": block,
-        "Business_Name": businessName,
-        "Person_Name": personName,
-        "Mobile": mobile,
-        "Address": address,
-        "Purpose": purpose,
-        "Re_visited": reVisited,
-        "Remark": remark,
-        "PhotoBase64": photoBase64 ?? "",
-      };
+      final resolvedEmployeeId =
+      (employeeId != null && employeeId.trim().isNotEmpty)
+          ? employeeId.trim()
+          : empId.trim();
 
-      if (reVisitDate != null) {
-        requestBody["RevisitDate"] = reVisitDate;
+      final uri = Uri.parse('$baseUrl/visitor/add');
+
+      final request = http.MultipartRequest('POST', uri);
+
+      request.headers['Accept'] = 'application/json';
+
+      // =========================
+      // BASIC EMPLOYEE INFORMATION
+      // =========================
+
+      request.fields['Emp_Name'] = empName;
+      request.fields['Emp_Type'] = empType;
+      request.fields['Emp_Mobile'] = empMobile;
+      request.fields['Emp_Id'] = empId;
+      request.fields['EmployeeId'] = resolvedEmployeeId;
+
+      // =========================
+      // VISIT INFORMATION
+      // =========================
+
+      request.fields['Visit_for'] = visitFor;
+      request.fields['VisitDate'] = visitDate;
+      request.fields['Password'] = password;
+
+      // =========================
+      // LOCATION
+      // =========================
+
+      request.fields['Country'] = country;
+      request.fields['State'] = state;
+      request.fields['District'] = district;
+      request.fields['Block'] = block;
+
+      // =========================
+      // BUSINESS / PERSON
+      // =========================
+
+      request.fields['Business_Name'] = businessName;
+      request.fields['Person_Name'] = personName;
+      request.fields['Mobile'] = mobile;
+      request.fields['Address'] = address;
+      request.fields['Purpose'] = purpose;
+
+      // =========================
+      // RE-VISIT
+      // =========================
+
+      request.fields['Re_visited'] = reVisited;
+
+      if (reVisitDate != null && reVisitDate.trim().isNotEmpty) {
+        request.fields['RevisitDate'] = reVisitDate;
       }
 
-      print('📤 Sending visitor data to API...');
-      print('   -> RevisitDate being sent: $reVisitDate');
-      // Truncate photo for clean logging
-      final logBody = Map<String, dynamic>.from(requestBody);
-      if (logBody["PhotoBase64"] != "") logBody["PhotoBase64"] = "[BASE64_IMAGE]";
-      print('Request Body: ${json.encode(logBody)}');
+      // =========================
+      // REMARK
+      // =========================
 
-      final response = await http
-          .post(
-        Uri.parse('$baseUrl/visitor/add'),
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: json.encode(requestBody),
-      )
-          .timeout(const Duration(seconds: timeoutSeconds));
+      request.fields['Remark'] = remark;
 
-      print('✅ API Response Status: ${response.statusCode}');
-      print('📥 API Response Body: ${response.body}');
+      // =========================
+      // OPTIONAL VISITOR DATA
+      // =========================
 
-      if (response.statusCode == 200) {
-        final responseData = json.decode(response.body);
+      request.fields['VisiterId'] = visiterId ?? "";
+      request.fields['Photo'] = photo ?? "";
+      request.fields['PhotoBase64'] = photoBase64 ?? "";
 
-        // Check if the API returned success in its response
-        // The API returns status: "Success" for success, "Duplicate" for duplicate mobile, etc.
-        final String? status = responseData['status']?.toString();
-        final String? message = responseData['message']?.toString();
+      if (message != null && message.trim().isNotEmpty) {
+        request.fields['message'] = message;
+      }
 
-        final bool isSuccess = status?.toLowerCase() == 'success' ||
-            (message?.toLowerCase().contains('success') ?? false);
+      // =========================
+      // IMAGE FILE
+      // =========================
+
+      if (imageFile != null && await imageFile.exists()) {
+        final multipartFile = await http.MultipartFile.fromPath(
+          'Photo',
+          imageFile.path,
+        );
+
+        request.files.add(multipartFile);
+      }
+
+      // =========================
+      // DEBUG LOG
+      // =========================
+
+      print('📤 Sending visitor data');
+      print('➡️ URL: $uri');
+      print('➡️ Fields: ${request.fields}');
+      print('➡️ Files: ${request.files.length}');
+
+      // =========================
+      // API REQUEST
+      // =========================
+
+      final streamedResponse = await request.send().timeout(
+        const Duration(seconds: timeoutSeconds),
+      );
+
+      final response = await http.Response.fromStream(streamedResponse);
+
+      print('✅ API Status: ${response.statusCode}');
+      print('📥 API Response: ${response.body}');
+
+      // =========================
+      // SUCCESS
+      // =========================
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        dynamic responseData;
+
+        try {
+          responseData = json.decode(response.body);
+        } catch (_) {
+          responseData = {'message': response.body};
+        }
+
+        final String? status = responseData is Map
+            ? responseData['status']?.toString()
+            : null;
+
+        final String? responseMessage = responseData is Map
+            ? (responseData['message']?.toString() ??
+            responseData['Message']?.toString())
+            : response.body;
+
+        final bool isSuccess =
+            status?.toLowerCase() == 'success' ||
+                (responseMessage?.toLowerCase().contains('success') ?? false) ||
+                response.statusCode == 200;
 
         return {
           'success': isSuccess,
-          'message':
-          responseData['message']?.toString() ??
-              (isSuccess
-                  ? 'Visit submitted successfully!'
-                  : 'Visit submission completed.'),
+          'message': responseMessage ?? 'Visit submitted successfully!',
           'data': responseData,
           'statusCode': response.statusCode,
         };
-      } else if (response.statusCode >= 400 && response.statusCode < 500) {
-        // Client error
-        final errorData = json.decode(response.body);
-        return {
-          'success': false,
-          'message':
-          errorData['message']?.toString() ??
-              'Invalid request. Please check your data.',
-          'error': errorData,
-          'statusCode': response.statusCode,
-        };
-      } else {
-        // Server error
-        return {
-          'success': false,
-          'message': 'Server error. Please try again later.',
-          'statusCode': response.statusCode,
-        };
       }
+
+      // =========================
+      // CLIENT ERROR
+      // =========================
+
+      if (response.statusCode >= 400 && response.statusCode < 500) {
+        try {
+          final errorData = json.decode(response.body);
+
+          return {
+            'success': false,
+            'message':
+            errorData['message']?.toString() ??
+                errorData['Message']?.toString() ??
+                'Invalid request (${response.statusCode}).',
+            'error': errorData,
+            'statusCode': response.statusCode,
+          };
+        } catch (_) {
+          return {
+            'success': false,
+            'message': 'Error (${response.statusCode}): ${response.body}',
+            'statusCode': response.statusCode,
+          };
+        }
+      }
+
+      // =========================
+      // SERVER ERROR
+      // =========================
+
+      return {
+        'success': false,
+        'message':
+        'Server error (${response.statusCode}). Please try again later.',
+        'statusCode': response.statusCode,
+      };
     } on http.ClientException catch (e) {
       print('❌ HTTP Client Exception: $e');
+
       return {
         'success': false,
         'message': 'Network connection failed. Please check your internet.',
@@ -124,6 +230,7 @@ class VisitorService {
       };
     } on FormatException catch (e) {
       print('❌ JSON Format Exception: $e');
+
       return {
         'success': false,
         'message': 'Data format error. Please try again.',
@@ -131,6 +238,7 @@ class VisitorService {
       };
     } on Exception catch (e) {
       print('❌ General Exception: $e');
+
       return {
         'success': false,
         'message': 'An unexpected error occurred. Please try again.',
@@ -139,7 +247,10 @@ class VisitorService {
     }
   }
 
-  // Method to get visitor list (for completeness)
+  // =========================
+  // GET VISITOR LIST
+  // =========================
+
   static Future<Map<String, dynamic>> getVisitorList(String empMobile) async {
     try {
       print('📤 Fetching visitor list for: $empMobile');
@@ -158,20 +269,22 @@ class VisitorService {
 
       if (response.statusCode == 200) {
         final responseData = json.decode(response.body);
+
         return {
           'success': true,
           'data': responseData,
           'message': responseData['Message'] ?? 'Data loaded successfully',
         };
-      } else {
-        return {
-          'success': false,
-          'message': 'Failed to load visitor list: ${response.statusCode}',
-          'statusCode': response.statusCode,
-        };
       }
+
+      return {
+        'success': false,
+        'message': 'Failed to load visitor list: ${response.statusCode}',
+        'statusCode': response.statusCode,
+      };
     } catch (e) {
       print('❌ Error fetching visitor list: $e');
+
       return {'success': false, 'message': 'Failed to load visitor list: $e'};
     }
   }

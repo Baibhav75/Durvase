@@ -165,7 +165,7 @@ class _OrderSummaryScreenState extends State<OrderSummaryScreen> {
                               ClipRRect(
                                 borderRadius: BorderRadius.circular(12),
                                 child: Image.network(
-                                  "https://durvasaayurved.online${item.image}",
+                                  "https://durvasaayurved.com${item.image}",
                                   width: 70,
                                   height: 70,
                                   fit: BoxFit.cover,

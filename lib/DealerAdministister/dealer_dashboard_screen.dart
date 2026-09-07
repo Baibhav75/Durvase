@@ -4,9 +4,14 @@ import '../OrderPage/orderPagefist.dart';
 import '../OrderPage/utils/theme_constants.dart';
 import '../model/Dealer_Model/dealer_login_model.dart';
 import '../service/Dealer_service/dealer_login_service.dart';
-import 'dealer_place_order_page.dart';
 import 'dealer_drawer.dart';
-import 'my_orders_page.dart'; // 👈 apna actual path daalna
+import 'my_orders_page.dart';
+import 'dealer_payments_page.dart';
+import 'dealer_invoices_page.dart';
+import 'dealer_products_page.dart';
+import 'dealer_track_order_page.dart';
+import 'dealer_support_page.dart';
+import 'dealer_profile_screen.dart';
 
 class DealerDashboardPage extends StatefulWidget {
   const DealerDashboardPage({super.key});
@@ -36,6 +41,9 @@ class _DealerDashboardPageState extends State<DealerDashboardPage> {
     final name = _dealer?.name ?? 'Dealer';
     final dealerId = _dealer?.dealerId ?? '--';
     final phone = _dealer?.phone ?? '--';
+    final businessName = _dealer?.businessName ?? '';
+    final photoUrl = _dealer?.resolvedImageUrl ?? '';
+    final location = [_dealer?.district, _dealer?.state].where((s) => s != null && s.trim().isNotEmpty).join(', ');
 
     return Scaffold(
       key: _scaffoldKey, // 👈 add
@@ -73,7 +81,7 @@ class _DealerDashboardPageState extends State<DealerDashboardPage> {
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(20),
                         gradient: LinearGradient(
-                          begin: Alignment.topLeft,
+                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                           colors: [
                             ThemeConstants.primaryGreen,
@@ -94,7 +102,17 @@ class _DealerDashboardPageState extends State<DealerDashboardPage> {
                                   border: Border.all(color: ThemeConstants.primaryGold, width: 2),
                                   color: ThemeConstants.primaryGreen.withOpacity(0.5),
                                 ),
-                                child: const Icon(Icons.storefront, color: ThemeConstants.white, size: 28),
+                                child: photoUrl.isNotEmpty
+                                    ? ClipOval(
+                                        child: Image.network(
+                                          photoUrl,
+                                          height: 56,
+                                          width: 56,
+                                          fit: BoxFit.cover,
+                                          errorBuilder: (_, __, ___) => const Icon(Icons.storefront, color: ThemeConstants.white, size: 28),
+                                        ),
+                                      )
+                                    : const Icon(Icons.storefront, color: ThemeConstants.white, size: 28),
                               ),
                               const SizedBox(width: 14),
                               Expanded(
@@ -102,10 +120,11 @@ class _DealerDashboardPageState extends State<DealerDashboardPage> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      'Dealer Portal',
+                                      businessName.isNotEmpty ? businessName : 'Dealer Portal',
                                       style: GoogleFonts.poppins(
                                         fontSize: 13,
-                                        color: ThemeConstants.white.withOpacity(0.85),
+                                        fontWeight: businessName.isNotEmpty ? FontWeight.w600 : FontWeight.normal,
+                                        color: ThemeConstants.white.withOpacity(0.9),
                                       ),
                                     ),
                                     const SizedBox(height: 2),
@@ -118,7 +137,7 @@ class _DealerDashboardPageState extends State<DealerDashboardPage> {
                                       ),
                                     ),
                                     Text(
-                                      'Dealer',
+                                      location.isNotEmpty ? location : 'Authorized Dealer',
                                       style: GoogleFonts.poppins(
                                         fontSize: 12,
                                         color: ThemeConstants.white.withOpacity(0.85),
@@ -157,14 +176,11 @@ class _DealerDashboardPageState extends State<DealerDashboardPage> {
                         _featureCard(
                           Icons.shopping_cart_outlined,
                           'Place Order',
-                              () {
+                          () {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => DealerPlaceOrderPage(
-                                  dealer: _dealer,
-                                  dealerId: dealerId,
-                                ),
+                                builder: (context) => OrderPageFst(userId: dealerId),
                               ),
                             );
                           },
@@ -173,11 +189,11 @@ class _DealerDashboardPageState extends State<DealerDashboardPage> {
                         _featureCard(
                           Icons.receipt_long_outlined,
                           'My Orders',
-                              () {
+                          () {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) =>   MyOrdersPage(idType: 'Dealer', idValue: dealerId,),
+                                builder: (context) => MyOrdersPage(idType: 'Dealer', idValue: dealerId),
                               ),
                             );
                           },
@@ -186,48 +202,84 @@ class _DealerDashboardPageState extends State<DealerDashboardPage> {
                         _featureCard(
                           Icons.account_balance_wallet_outlined,
                           'Payments',
-                              () {
-                            // TODO: Navigate to Payments
+                          () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => DealerPaymentsPage(dealerId: dealerId),
+                              ),
+                            );
                           },
                         ),
 
                         _featureCard(
                           Icons.description_outlined,
                           'Invoices',
-                              () {
-                            // TODO: Navigate to Invoices
+                          () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => DealerInvoicesPage(dealerId: dealerId),
+                              ),
+                            );
                           },
                         ),
 
                         _featureCard(
                           Icons.inventory_2_outlined,
                           'Products',
-                              () {
-                            // TODO: Navigate to Products
+                          () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => DealerProductsPage(dealerId: dealerId),
+                              ),
+                            );
                           },
                         ),
 
                         _featureCard(
                           Icons.local_shipping_outlined,
                           'Track Order',
-                              () {
-                            // TODO: Navigate to Track Order
+                          () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => DealerTrackOrderPage(dealerId: dealerId),
+                              ),
+                            );
                           },
                         ),
 
                         _featureCard(
                           Icons.support_agent_outlined,
                           'Support',
-                              () {
-                            // TODO: Navigate to Support
+                          () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => DealerSupportPage(
+                                  dealerId: dealerId,
+                                  dealerName: name,
+                                  dealerPhone: phone,
+                                ),
+                              ),
+                            );
                           },
                         ),
 
                         _featureCard(
                           Icons.person_outline,
                           'Profile',
-                              () {
-                            // TODO: Navigate to Profile
+                          () {
+                            if (_dealer != null) {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => DealerProfilePage(dealer: _dealer!),
+                                ),
+                              );
+                            }
                           },
                         ),
                       ],

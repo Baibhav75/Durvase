@@ -54,6 +54,7 @@ class _NewVisitFormState extends State<NewVisitFormr> {
   final mobileController = TextEditingController();
   final addressController = TextEditingController();
   final remarksController = TextEditingController();
+  final passwordController = TextEditingController();
 
   final List<String> purposes = ['Meeting', 'Survey', 'Follow-up'];
 
@@ -423,6 +424,15 @@ class _NewVisitFormState extends State<NewVisitFormr> {
       );
       return false;
     }
+    if (passwordController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('❌ Please enter password'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return false;
+    }
 
     // Only validate location fields if we have location data available
     if (_states.isNotEmpty) {
@@ -486,6 +496,9 @@ class _NewVisitFormState extends State<NewVisitFormr> {
       final String empMobile = widget.employeeData?.mobile ?? "";
       final String empName = widget.employeeData?.name ?? "Unknown Employee";
       final String empId = widget.employeeData?.employeeId ?? "EMP000000";
+      final String empPassword = passwordController.text.trim();
+
+      final String visitDate = _formatDateForAPI(DateTime.now());
 
       print('🚀 Submitting visit data:');
       print('   👤 Employee: $empName ($empId)');
@@ -509,6 +522,9 @@ class _NewVisitFormState extends State<NewVisitFormr> {
         empMobile: empMobile,
         empName: empName,
         empId: empId,
+        employeeId: empId,
+        password: empPassword,
+        visiterId: widget.prefillData?.visiterId ?? widget.prefillData?.id?.toString(),
         visitFor: visitType,
         country: 'India',
         state: selectedState ?? widget.employeeData?.state ?? '',
@@ -521,8 +537,9 @@ class _NewVisitFormState extends State<NewVisitFormr> {
         purpose: selectedPurpose ?? purposes.first,
         reVisited: reVisitRequired == true ? 'Yes' : 'No',
         remark: remarksController.text,
+        imageFile: _capturedImage,
         photoBase64: _imageToBase64(_capturedImage),
-        reVisitDate: calculatedRevisitDate,
+        reVisitDate: calculatedRevisitDate, visitDate: '',
       );
 
       setState(() {
@@ -578,6 +595,8 @@ class _NewVisitFormState extends State<NewVisitFormr> {
     mobileController.clear();
     addressController.clear();
     remarksController.clear();
+    passwordController.clear();
+
     setState(() {
       selectedPurpose = null;
       reVisitRequired = null;

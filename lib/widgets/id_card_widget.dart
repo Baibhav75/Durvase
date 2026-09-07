@@ -46,7 +46,7 @@ class DurvasaIdCardWidget extends StatelessWidget {
     if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
       return trimmed;
     }
-    const baseUrl = 'https://durvasaayurved.online';
+    const baseUrl = 'https://durvasaayurved.com';
     if (trimmed.startsWith('/')) {
       return '$baseUrl$trimmed';
     }

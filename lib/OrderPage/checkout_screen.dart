@@ -4,18 +4,21 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:shimmer/shimmer.dart';
 
 import '../PaymentPage/payment_screen.dart';
+import 'package:razorpay_flutter/razorpay_flutter.dart';
+import '../service/payment_service.dart';
 import '../constants/app_colors.dart';
 import '../model/checkout_model.dart';
-import '../model/Dealer_Model/dealer_profile_model.dart';
 import '../model/Retailer_model/retailer_team_model.dart';
+import '../model/Retailer_model/asm_list_model.dart';
 import '../service/Auth_servcie.dart';
-import '../service/Dealer_service/dealer_profile_service.dart';
 import '../service/Retailer_service/retailer_profile_service.dart';
 import '../service/session_manager.dart';
 import '../service/api_serviceProfile.dart';
 import '../service/api_service.dart' as order_api;
+import '../model/user_address_model.dart';
+import 'widgets/payment_widget.dart';
 
-enum CheckoutPartnerType { direct, retailer, dealer }
+enum CheckoutPartnerType { retailer, asm }
 
 class CheckoutScreen extends StatefulWidget {
   final String userId;
@@ -39,16 +42,35 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   final AuthService _authService = AuthService();
   late Future<CheckoutResponse?> _checkoutFuture;
   String _effectiveUserId = '';
+  UserAddress? _userAddress;
 
   CheckoutPartnerType? _selectedPartnerType;
   RetailerItem? _selectedRetailer;
-  DealerProfileModel? _selectedDealer;
+  AsmItem? _selectedAsm;
   bool _isPlacingOrder = false;
+
+  // Payment Selection State
+  CheckoutPaymentType _selectedPaymentType = CheckoutPaymentType.cod;
+  final TextEditingController _upiIdController = TextEditingController();
+  final PaymentService _paymentService = PaymentService();
+  CheckoutResponse? _pendingCheckoutForOnline;
 
   @override
   void initState() {
     super.initState();
+    _paymentService.initialize(
+      onSuccess: _handleRazorpaySuccess,
+      onError: _handleRazorpayError,
+      onWallet: _handleRazorpayWallet,
+    );
     _resolveUserIdAndLoad();
+  }
+
+  @override
+  void dispose() {
+    _upiIdController.dispose();
+    _paymentService.dispose();
+    super.dispose();
   }
 
   void _resolveUserIdAndLoad() {
@@ -59,7 +81,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     // 1. Check if passed userId is valid
     _effectiveUserId = widget.userId.trim();
 
-    // 2. Fallback to SessionManager stored userId
+    // 2. Fallback to SessionManager stored VisiterId
+    if (_effectiveUserId.isEmpty) {
+      final savedVisiterId = await SessionManager.getVisiterId();
+      if (savedVisiterId != null && savedVisiterId.trim().isNotEmpty) {
+        _effectiveUserId = savedVisiterId.trim();
+      }
+    }
+
+    // 3. Fallback to SessionManager stored userId
     if (_effectiveUserId.isEmpty) {
       final savedId = await SessionManager.getUserId();
       if (savedId != null && savedId.trim().isNotEmpty) {
@@ -67,7 +97,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       }
     }
 
-    // 3. Fallback to SessionManager EmpId
+    // 4. Fallback to SessionManager EmpId
     if (_effectiveUserId.isEmpty) {
       final empId = await SessionManager.getEmpId();
       if (empId != null && empId.trim().isNotEmpty) {
@@ -75,14 +105,27 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       }
     }
 
-    // 4. Fetch user profile for delivery address & customer info
+    // 5. Fetch user address using GetByAddressRetailerDealer API
+    if (_effectiveUserId.isNotEmpty) {
+      try {
+        final addressResp = await order_api.ApiService.getAddressByVisiterId(_effectiveUserId);
+        if (addressResp != null && addressResp.status && addressResp.data != null) {
+          _userAddress = addressResp.data;
+          debugPrint("📍 User Address fetched: ${_userAddress?.formattedAddress} (${_userAddress?.purpose})");
+        }
+      } catch (e) {
+        debugPrint("Error fetching user address for checkout: $e");
+      }
+    }
+
+    // 6. Fetch user profile for delivery address & customer info
     CheckoutUser resolvedUser = CheckoutUser(
       fullName: "Valued Customer",
       mobile: "",
       email: "",
-      permanentAddress: "",
-      city: "",
-      state: "",
+      permanentAddress: _userAddress?.address ?? "",
+      city: _userAddress?.district.isNotEmpty == true ? _userAddress!.district : (_userAddress?.block ?? ""),
+      state: _userAddress?.state ?? "",
     );
 
     try {
@@ -93,19 +136,44 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         if (employee != null) {
           if (_effectiveUserId.isEmpty && employee.userId != null && employee.userId!.isNotEmpty) {
             _effectiveUserId = employee.userId!;
+            // Fetch address if not fetched yet
+            if (_userAddress == null) {
+              final addressResp = await order_api.ApiService.getAddressByVisiterId(_effectiveUserId);
+              if (addressResp != null && addressResp.status && addressResp.data != null) {
+                _userAddress = addressResp.data;
+              }
+            }
           }
           resolvedUser = CheckoutUser(
             fullName: employee.name ?? "Valued Customer",
             mobile: employee.mobile ?? loginData.mobile ?? "",
             email: employee.email ?? "",
-            permanentAddress: employee.address ?? "",
-            city: employee.district ?? employee.postOffice ?? "",
-            state: employee.state ?? "",
+            permanentAddress: _userAddress?.address.isNotEmpty == true
+                ? _userAddress!.address
+                : (employee.address ?? ""),
+            city: _userAddress?.district.isNotEmpty == true
+                ? _userAddress!.district
+                : (employee.district ?? employee.postOffice ?? ""),
+            state: _userAddress?.state.isNotEmpty == true
+                ? _userAddress!.state
+                : (employee.state ?? ""),
           );
         }
       }
     } catch (e) {
       debugPrint("Error fetching profile for checkout: $e");
+    }
+
+    // Merge UserAddress into resolvedUser if permanentAddress is empty
+    if (_userAddress != null && _userAddress!.isNotEmpty) {
+      resolvedUser = CheckoutUser(
+        fullName: resolvedUser.fullName.isNotEmpty ? resolvedUser.fullName : "Valued Customer",
+        mobile: resolvedUser.mobile,
+        email: resolvedUser.email,
+        permanentAddress: _userAddress!.address.isNotEmpty ? _userAddress!.address : resolvedUser.permanentAddress,
+        city: _userAddress!.district.isNotEmpty ? _userAddress!.district : (_userAddress!.block.isNotEmpty ? _userAddress!.block : resolvedUser.city),
+        state: _userAddress!.state.isNotEmpty ? _userAddress!.state : resolvedUser.state,
+      );
     }
 
     debugPrint("Checkout Resolved Effective UserId: '$_effectiveUserId'");
@@ -238,8 +306,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 1. Partner Selection Section (Dealer / Retailer Choose Option)
-                _buildSectionHeader("Select Partner (Dealer / Retailer)", Icons.handshake_outlined),
+                Text(
+                  "User ID: $_effectiveUserId",
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textDark,
+                  ),
+                ),
+                // 1. Partner Selection Section (Retailer / ASM Choose Option)
+                _buildSectionHeader("Select Partner (Retailer / ASM)", Icons.handshake_outlined),
                 const SizedBox(height: 10),
                 _buildPartnerSelectionCard(),
 
@@ -259,14 +335,32 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
                 const SizedBox(height: 22),
 
-                // 4. Price Summary Section
+                // 4. Payment Method Section
+                _buildSectionHeader("Select Payment Method", Icons.account_balance_wallet_outlined),
+                const SizedBox(height: 10),
+                PaymentWidget(
+                  selectedPaymentType: _selectedPaymentType,
+                  onPaymentTypeChanged: (type) {
+                    setState(() {
+                      _selectedPaymentType = type;
+                    });
+                  },
+                  upiIdController: _upiIdController,
+                  onUpiChanged: () {
+                    setState(() {});
+                  },
+                ),
+
+                const SizedBox(height: 22),
+
+                // 5. Price Summary Section
                 _buildSectionHeader("Payment Summary", Icons.receipt_long_outlined),
                 const SizedBox(height: 10),
                 _buildPriceSummaryCard(checkout.summary, checkout.isEligibleToUsePoint),
 
                 const SizedBox(height: 16),
 
-                // 5. Safe Checkout Assurance Banner
+                // 6. Safe Checkout Assurance Banner
                 _buildTrustBanner(),
               ],
             ),
@@ -287,7 +381,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   // ============================================================
-  // PARTNER SELECTION WIDGETS (DEALER & RETAILER CHOOSE OPTION)
+  // PARTNER SELECTION WIDGETS (RETAILER & ASM CHOOSE OPTION)
   // ============================================================
   Widget _buildPartnerSelectionCard() {
     return Container(
@@ -321,14 +415,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             children: [
               Expanded(
                 child: _buildPartnerTypeChip(
-                  type: CheckoutPartnerType.direct,
-                  title: "Direct",
-                  icon: Icons.person_outline,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _buildPartnerTypeChip(
                   type: CheckoutPartnerType.retailer,
                   title: "Retailer",
                   icon: Icons.storefront_outlined,
@@ -337,9 +423,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: _buildPartnerTypeChip(
-                  type: CheckoutPartnerType.dealer,
-                  title: "Dealer",
-                  icon: Icons.business_outlined,
+                  type: CheckoutPartnerType.asm,
+                  title: "ASM",
+                  icon: Icons.military_tech_outlined,
                 ),
               ),
             ],
@@ -362,7 +448,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      "Please choose a partner channel above (Direct, Retailer, or Dealer).",
+                      "Please choose a partner channel above (Retailer or ASM).",
                       style: GoogleFonts.poppins(
                         fontSize: 11.5,
                         color: Colors.amber.shade900,
@@ -373,34 +459,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 ],
               ),
             )
-          else if (_selectedPartnerType == CheckoutPartnerType.direct)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: AppColors.creamBackground,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.lightGold.withOpacity(0.5)),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.info_outline_rounded, size: 18, color: AppColors.primaryGreen),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      "Direct order. No dealer or retailer partner mapped.",
-                      style: GoogleFonts.poppins(
-                        fontSize: 11.5,
-                        color: AppColors.textDark.withOpacity(0.8),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            )
           else if (_selectedPartnerType == CheckoutPartnerType.retailer)
             _buildSelectedRetailerSection()
-          else if (_selectedPartnerType == CheckoutPartnerType.dealer)
-            _buildSelectedDealerSection(),
+          else if (_selectedPartnerType == CheckoutPartnerType.asm)
+            _buildSelectedAsmSection(),
         ],
       ),
     );
@@ -419,15 +481,15 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           _selectedPartnerType = type;
           if (type == CheckoutPartnerType.retailer && _selectedRetailer == null) {
             _showRetailerSelectionSheet();
-          } else if (type == CheckoutPartnerType.dealer && _selectedDealer == null) {
-            _showDealerSelectionSheet();
+          } else if (type == CheckoutPartnerType.asm && _selectedAsm == null) {
+            _showAsmSelectionSheet();
           }
         });
       },
       borderRadius: BorderRadius.circular(10),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 6),
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
         decoration: BoxDecoration(
           color: isSelected ? AppColors.primaryGreen : AppColors.creamBackground,
           borderRadius: BorderRadius.circular(10),
@@ -450,17 +512,17 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           children: [
             Icon(
               icon,
-              size: 16,
+              size: 15,
               color: isSelected ? AppColors.primaryGold : AppColors.textSecondary,
             ),
-            const SizedBox(width: 6),
+            const SizedBox(width: 4),
             Flexible(
               child: Text(
                 title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.poppins(
-                  fontSize: 12,
+                  fontSize: 11.5,
                   fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
                   color: isSelected ? AppColors.white : AppColors.textDark,
                 ),
@@ -509,6 +571,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     }
 
     final retailer = _selectedRetailer!;
+    final String retailerCodeOrId = retailer.retailerId ?? retailer.visiterId ?? (retailer.id != null ? retailer.id.toString() : 'N/A');
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -522,12 +586,26 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(6),
+                height: 40,
+                width: 40,
                 decoration: BoxDecoration(
                   color: AppColors.primaryGreen.withOpacity(0.12),
                   shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.primaryGold, width: 1),
                 ),
-                child: const Icon(Icons.storefront_rounded, size: 18, color: AppColors.primaryGreen),
+                child: retailer.resolvedImageUrl.isNotEmpty
+                    ? ClipOval(
+                        child: Image.network(
+                          retailer.resolvedImageUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const Icon(
+                            Icons.storefront_rounded,
+                            size: 20,
+                            color: AppColors.primaryGreen,
+                          ),
+                        ),
+                      )
+                    : const Icon(Icons.storefront_rounded, size: 20, color: AppColors.primaryGreen),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -535,7 +613,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      retailer.name ?? "Retailer Partner",
+                      retailer.displayName,
                       style: GoogleFonts.poppins(
                         fontSize: 13.5,
                         fontWeight: FontWeight.bold,
@@ -543,7 +621,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       ),
                     ),
                     Text(
-                      "ID: ${retailer.retailerId ?? 'N/A'} • ${retailer.mobile ?? ''}",
+                      "ID: $retailerCodeOrId • ${retailer.mobile ?? 'No contact'}",
                       style: GoogleFonts.poppins(
                         fontSize: 11.5,
                         color: AppColors.textSecondary,
@@ -573,9 +651,19 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           ),
           if (retailer.displayLocation.isNotEmpty) ...[
             const SizedBox(height: 6),
-            Text(
-              "Territory: ${retailer.displayLocation}",
-              style: GoogleFonts.poppins(fontSize: 11, color: AppColors.textDark.withOpacity(0.7)),
+            Row(
+              children: [
+                const Icon(Icons.location_on_outlined, size: 13, color: AppColors.textSecondary),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    "Location: ${retailer.displayLocation}",
+                    style: GoogleFonts.poppins(fontSize: 11, color: AppColors.textDark.withOpacity(0.7)),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
             ),
           ],
         ],
@@ -583,10 +671,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
-  Widget _buildSelectedDealerSection() {
-    if (_selectedDealer == null) {
+
+
+  Widget _buildSelectedAsmSection() {
+    if (_selectedAsm == null) {
       return InkWell(
-        onTap: _showDealerSelectionSheet,
+        onTap: _showAsmSelectionSheet,
         borderRadius: BorderRadius.circular(12),
         child: Container(
           width: double.infinity,
@@ -606,7 +696,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               const Icon(Icons.add_circle_outline, color: AppColors.primaryGreen, size: 20),
               const SizedBox(width: 8),
               Text(
-                "Choose Dealer Partner",
+                "Choose ASM Partner",
                 style: GoogleFonts.poppins(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
@@ -619,7 +709,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       );
     }
 
-    final dealer = _selectedDealer!;
+    final asm = _selectedAsm!;
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -633,38 +723,85 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(6),
+                height: 44,
+                width: 44,
                 decoration: BoxDecoration(
                   color: AppColors.primaryGreen.withOpacity(0.12),
                   shape: BoxShape.circle,
+                  border: Border.all(color: AppColors.primaryGold, width: 1.2),
                 ),
-                child: const Icon(Icons.business_rounded, size: 18, color: AppColors.primaryGreen),
+                child: asm.resolvedImageUrl.isNotEmpty
+                    ? ClipOval(
+                        child: Image.network(
+                          asm.resolvedImageUrl,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => const Icon(
+                            Icons.military_tech_rounded,
+                            size: 22,
+                            color: AppColors.primaryGreen,
+                          ),
+                        ),
+                      )
+                    : const Icon(Icons.military_tech_rounded, size: 22, color: AppColors.primaryGreen),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      dealer.name ?? "Authorized Dealer",
-                      style: GoogleFonts.poppins(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textDark,
-                      ),
+                    Row(
+                      children: [
+                        Flexible(
+                          child: Text(
+                            asm.displayName,
+                            style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textDark,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryGreen,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            "ID: ${asm.displayId}",
+                            style: GoogleFonts.poppins(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.white,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
-                    Text(
-                      "ID: ${dealer.dealerId ?? 'N/A'} • ${dealer.phone ?? ''}",
-                      style: GoogleFonts.poppins(
-                        fontSize: 11.5,
-                        color: AppColors.textSecondary,
+                    if (asm.mobile != null && asm.mobile!.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          const Icon(Icons.phone_outlined, size: 12, color: AppColors.textSecondary),
+                          const SizedBox(width: 3),
+                          Text(
+                            asm.mobile!,
+                            style: GoogleFonts.poppins(
+                              fontSize: 11.5,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
                       ),
-                    ),
+                    ],
                   ],
                 ),
               ),
               TextButton.icon(
-                onPressed: _showDealerSelectionSheet,
+                onPressed: _showAsmSelectionSheet,
                 icon: const Icon(Icons.swap_horiz, size: 16, color: AppColors.primaryGreen),
                 label: Text(
                   "Change",
@@ -682,11 +819,106 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               ),
             ],
           ),
-          if (dealer.businessAddress != null && dealer.businessAddress!.isNotEmpty) ...[
-            const SizedBox(height: 6),
-            Text(
-              "Address: ${dealer.businessAddress}",
-              style: GoogleFonts.poppins(fontSize: 11, color: AppColors.textDark.withOpacity(0.7)),
+          const SizedBox(height: 8),
+          const Divider(height: 1, color: AppColors.creamBackground),
+          const SizedBox(height: 6),
+          // Address, State, Country details
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              // Country Badge
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: Colors.blue.shade200),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.public, size: 11, color: Colors.blue.shade700),
+                    const SizedBox(width: 3),
+                    Text(
+                      "Country: ${asm.country?.isNotEmpty == true ? asm.country : 'India'}",
+                      style: GoogleFonts.poppins(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.blue.shade800,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // State Badge
+              if (asm.state != null && asm.state!.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryGreen.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: AppColors.primaryGreen.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.location_city_rounded, size: 11, color: AppColors.primaryGreen),
+                      const SizedBox(width: 3),
+                      Text(
+                        "State: ${asm.state}",
+                        style: GoogleFonts.poppins(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.primaryGreen,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              // District Badge
+              if (asm.district != null && asm.district!.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.creamBackground,
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: AppColors.lightGold.withOpacity(0.5)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.place_outlined, size: 11, color: AppColors.deepGold),
+                      const SizedBox(width: 3),
+                      Text(
+                        "District: ${asm.district}",
+                        style: GoogleFonts.poppins(
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w500,
+                          color: AppColors.textDark,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+          if (asm.address != null && asm.address!.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                const Icon(Icons.home_outlined, size: 12, color: AppColors.textSecondary),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    "Address: ${asm.address}",
+                    style: GoogleFonts.poppins(fontSize: 11, color: AppColors.textSecondary),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
             ),
           ],
         ],
@@ -698,6 +930,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   // RETAILER LIST MODAL SELECTION SHEET
   // ============================================================
   void _showRetailerSelectionSheet() {
+    final String userState = (_userAddress != null && _userAddress!.state.trim().isNotEmpty)
+        ? _userAddress!.state.trim()
+        : '';
+    final String userBlock = (_userAddress != null && _userAddress!.block.trim().isNotEmpty)
+        ? _userAddress!.block.trim()
+        : '';
+    final String userDistrict = (_userAddress != null && _userAddress!.district.trim().isNotEmpty)
+        ? _userAddress!.district.trim()
+        : '';
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -706,7 +948,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         return StatefulBuilder(
           builder: (modalContext, setModalState) {
             return _RetailerSelectionModalBody(
-              selectedRetailerId: _selectedRetailer?.retailerId,
+              selectedRetailerId: _selectedRetailer?.visiterId ?? _selectedRetailer?.retailerId ?? (_selectedRetailer?.id != null ? _selectedRetailer!.id.toString() : null),
+              userState: userState,
+              userBlock: userBlock,
+              userDistrict: userDistrict,
               onSelected: (retailer) {
                 setState(() {
                   _selectedRetailer = retailer;
@@ -721,10 +966,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
+
+
   // ============================================================
-  // DEALER LIST MODAL SELECTION SHEET
+  // ASM LIST MODAL SELECTION SHEET
   // ============================================================
-  void _showDealerSelectionSheet() {
+  void _showAsmSelectionSheet() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -732,12 +979,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (modalContext, setModalState) {
-            return _DealerSelectionModalBody(
-              selectedDealerId: _selectedDealer?.dealerId,
-              onSelected: (dealer) {
+            return _AsmSelectionModalBody(
+              selectedAsmId: _selectedAsm?.empId ?? _selectedAsm?.employeeCode,
+              onSelected: (asm) {
                 setState(() {
-                  _selectedDealer = dealer;
-                  _selectedPartnerType = CheckoutPartnerType.dealer;
+                  _selectedAsm = asm;
+                  _selectedPartnerType = CheckoutPartnerType.asm;
                 });
                 Navigator.pop(ctx);
               },
@@ -766,9 +1013,24 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Widget _buildDeliveryAddressCard(CheckoutUser user) {
-    final hasAddress = user.permanentAddress.trim().isNotEmpty ||
+    final String purposeTag = (_userAddress?.purpose.isNotEmpty == true)
+        ? _userAddress!.purpose
+        : "Delivery Address";
+
+    final bool hasDetailedAddress = _userAddress != null && _userAddress!.isNotEmpty;
+    final bool hasUserAddress = user.permanentAddress.trim().isNotEmpty ||
         user.city.trim().isNotEmpty ||
         user.state.trim().isNotEmpty;
+
+    final String displayBlock = (_userAddress != null && _userAddress!.block.trim().isNotEmpty)
+        ? _userAddress!.block.trim()
+        : '';
+    final String displayDistrict = (_userAddress != null && _userAddress!.district.trim().isNotEmpty)
+        ? _userAddress!.district.trim()
+        : user.city.trim();
+    final String displayState = (_userAddress != null && _userAddress!.state.trim().isNotEmpty)
+        ? _userAddress!.state.trim()
+        : user.state.trim();
 
     return Container(
       decoration: BoxDecoration(
@@ -827,13 +1089,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                 ),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: AppColors.secondaryGreen.withOpacity(0.12),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
-                  "Home",
+                  purposeTag,
                   style: GoogleFonts.poppins(
                     color: AppColors.secondaryGreen,
                     fontWeight: FontWeight.w600,
@@ -847,16 +1109,166 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
             padding: EdgeInsets.symmetric(vertical: 12),
             child: Divider(height: 1),
           ),
-          Text(
-            hasAddress
-                ? "${user.permanentAddress}${user.permanentAddress.isNotEmpty ? ', ' : ''}${user.city}${user.city.isNotEmpty ? ', ' : ''}${user.state}"
-                : "Address will be confirmed upon order dispatch",
-            style: GoogleFonts.poppins(
-              color: AppColors.textDark.withOpacity(0.85),
-              fontSize: 13.5,
-              height: 1.4,
+          if (hasDetailedAddress) ...[
+            if (_userAddress!.address.isNotEmpty)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.home_outlined, size: 16, color: AppColors.primaryGreen),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _userAddress!.address,
+                      style: GoogleFonts.poppins(
+                        color: AppColors.textDark,
+                        fontWeight: FontWeight.w500,
+                        fontSize: 13.5,
+                        height: 1.3,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            if (displayBlock.isNotEmpty || displayDistrict.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.location_city_outlined, size: 16, color: AppColors.textSecondary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      [
+                        if (displayBlock.isNotEmpty) "Block: $displayBlock",
+                        if (displayDistrict.isNotEmpty) "District: $displayDistrict",
+                      ].join(', '),
+                      style: GoogleFonts.poppins(
+                        color: AppColors.textSecondary,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            if (displayState.isNotEmpty || (_userAddress?.country.isNotEmpty ?? false)) ...[
+              const SizedBox(height: 6),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.public_outlined, size: 16, color: AppColors.textSecondary),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      [
+                        if (displayState.isNotEmpty) "State: $displayState",
+                        if (_userAddress?.country.isNotEmpty ?? false) _userAddress!.country,
+                      ].join(', '),
+                      style: GoogleFonts.poppins(
+                        color: AppColors.textSecondary,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ] else ...[
+            Text(
+              hasUserAddress
+                  ? "${user.permanentAddress}${user.permanentAddress.isNotEmpty ? ', ' : ''}${user.city}${user.city.isNotEmpty ? ', ' : ''}${user.state}"
+                  : "Address will be confirmed upon order dispatch",
+              style: GoogleFonts.poppins(
+                color: AppColors.textDark.withOpacity(0.85),
+                fontSize: 13.5,
+                height: 1.4,
+              ),
             ),
-          ),
+          ],
+
+          // State and Block highlight tags
+          if (displayBlock.isNotEmpty || displayState.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                if (displayBlock.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryGreen.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: AppColors.primaryGreen.withOpacity(0.3)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.location_city_rounded, size: 13, color: AppColors.primaryGreen),
+                        const SizedBox(width: 4),
+                        Text(
+                          "Block: $displayBlock",
+                          style: GoogleFonts.poppins(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.primaryGreen,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (displayDistrict.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.creamBackground,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: AppColors.lightGold.withOpacity(0.6)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.domain_outlined, size: 13, color: AppColors.textDark),
+                        const SizedBox(width: 4),
+                        Text(
+                          "District: $displayDistrict",
+                          style: GoogleFonts.poppins(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w500,
+                            color: AppColors.textDark,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (displayState.isNotEmpty)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryGold.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: AppColors.primaryGold.withOpacity(0.5)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.map_outlined, size: 13, color: AppColors.deepGold),
+                        const SizedBox(width: 4),
+                        Text(
+                          "State: $displayState",
+                          style: GoogleFonts.poppins(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.deepGold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ],
+
           if (user.email.isNotEmpty) ...[
             const SizedBox(height: 6),
             Row(
@@ -901,7 +1313,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         final item = items[index];
         final String rawImg = item.image.trim();
         final String imgUrl = rawImg.isNotEmpty
-            ? (rawImg.startsWith('http') ? rawImg : 'https://durvasaayurved.online$rawImg')
+            ? (rawImg.startsWith('http') ? rawImg : 'https://durvasaayurved.com$rawImg')
             : '';
 
         return Container(
@@ -1176,7 +1588,32 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   }
 
   Widget _buildStickyBottomBar(CheckoutResponse checkout) {
-    final double finalAmount = checkout.summary.finalAmount;
+    final double finalAmount = checkout.summary.finalAmount > 0
+        ? checkout.summary.finalAmount
+        : checkout.summary.totalSellingPrice;
+
+    String buttonLabel;
+    IconData buttonIcon;
+    if (_isPlacingOrder) {
+      buttonLabel = "PROCESSING ORDER...";
+      buttonIcon = Icons.hourglass_top_rounded;
+    } else {
+      switch (_selectedPaymentType) {
+        case CheckoutPaymentType.cod:
+          buttonLabel = "PLACE ORDER (COD)";
+          buttonIcon = Icons.local_shipping_outlined;
+          break;
+        case CheckoutPaymentType.upi:
+          buttonLabel = "PLACE ORDER (UPI)";
+          buttonIcon = Icons.qr_code_scanner_rounded;
+          break;
+        case CheckoutPaymentType.online:
+          buttonLabel = "PROCEED TO PAY (ONLINE)";
+          buttonIcon = Icons.credit_card_rounded;
+          break;
+      }
+    }
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
       decoration: BoxDecoration(
@@ -1235,14 +1672,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             color: Colors.white,
                           ),
                         )
-                      : const Icon(Icons.check_circle_outline, color: AppColors.white, size: 18),
+                      : Icon(buttonIcon, color: AppColors.white, size: 18),
                   label: Text(
-                    _isPlacingOrder ? "PLACING ORDER..." : "PLACE ORDER",
+                    buttonLabel,
                     style: GoogleFonts.poppins(
                       color: AppColors.white,
-                      fontSize: 13.5,
+                      fontSize: 13,
                       fontWeight: FontWeight.bold,
-                      letterSpacing: 0.5,
+                      letterSpacing: 0.4,
                     ),
                   ),
                 ),
@@ -1276,7 +1713,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  "Please choose a partner channel (Direct, Retailer, or Dealer) to continue.",
+                  "Please choose a partner channel (Retailer or ASM) to continue.",
                   style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w500),
                 ),
               ),
@@ -1301,28 +1738,144 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       return;
     }
 
-    if (_selectedPartnerType == CheckoutPartnerType.dealer && _selectedDealer == null) {
+    if (_selectedPartnerType == CheckoutPartnerType.asm && _selectedAsm == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text("Please select a Dealer Partner first."),
+          content: Text("Please select an ASM Partner first."),
           backgroundColor: Colors.orange,
         ),
       );
-      _showDealerSelectionSheet();
+      _showAsmSelectionSheet();
       return;
     }
 
+    // Validate UPI ID if UPI option is selected
+    if (_selectedPaymentType == CheckoutPaymentType.upi) {
+      final upiId = _upiIdController.text.trim();
+      if (upiId.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    "Please enter your UPI ID to proceed.",
+                    style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w500),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.orange.shade800,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+        return;
+      }
+      if (!upiId.contains('@') || upiId.length < 5) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.white, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    "Please enter a valid UPI ID (e.g. user@oksbi, 9876543210@paytm).",
+                    style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w500),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.red.shade700,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+        return;
+      }
+    }
+
+    // Online Payment via Razorpay
+    if (_selectedPaymentType == CheckoutPaymentType.online) {
+      _pendingCheckoutForOnline = checkout;
+      final double finalAmount = checkout.summary.finalAmount > 0
+          ? checkout.summary.finalAmount
+          : checkout.summary.totalSellingPrice;
+      await _paymentService.openCheckout(
+        amount: finalAmount,
+        name: "Durvasa Ayurved",
+        description: "Order Payment",
+        contact: checkout.user.mobile.isNotEmpty ? checkout.user.mobile : "9999999999",
+        email: checkout.user.email.isNotEmpty ? checkout.user.email : "customer@durvasaayurved.com",
+      );
+      return;
+    }
+
+    // Cash on Delivery or UPI ID
+    final String paymentMode = _selectedPaymentType == CheckoutPaymentType.upi
+        ? "UPI (${_upiIdController.text.trim()})"
+        : "COD";
+
+    await _executePlaceOrderApi(checkout, paymentMode: paymentMode);
+  }
+
+  void _handleRazorpaySuccess(PaymentSuccessResponse response) async {
+    if (_pendingCheckoutForOnline != null) {
+      final checkout = _pendingCheckoutForOnline!;
+      _pendingCheckoutForOnline = null;
+      await _executePlaceOrderApi(
+        checkout,
+        paymentMode: "Razorpay (ID: ${response.paymentId ?? 'Success'})",
+      );
+    }
+  }
+
+  void _handleRazorpayError(PaymentFailureResponse response) {
+    _pendingCheckoutForOnline = null;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          response.message ?? "Online Payment Failed. Please try again.",
+          style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w500),
+        ),
+        backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+
+  void _handleRazorpayWallet(ExternalWalletResponse response) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          "External wallet selected: ${response.walletName}",
+          style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w500),
+        ),
+        backgroundColor: Colors.blueAccent,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+
+  Future<void> _executePlaceOrderApi(CheckoutResponse checkout, {required String paymentMode}) async {
     setState(() {
       _isPlacingOrder = true;
     });
 
     try {
       final String retailerId = (_selectedPartnerType == CheckoutPartnerType.retailer)
-          ? (_selectedRetailer?.retailerId ?? "")
+          ? (_selectedRetailer?.retailerId ?? _selectedRetailer?.visiterId ?? (_selectedRetailer?.id != null ? _selectedRetailer!.id.toString() : ""))
           : "";
 
-      final String dealerId = (_selectedPartnerType == CheckoutPartnerType.dealer)
-          ? (_selectedDealer?.dealerId ?? "")
+      final String dealerId = "";
+
+      final String asmId = (_selectedPartnerType == CheckoutPartnerType.asm)
+          ? (_selectedAsm?.empId ?? _selectedAsm?.employeeCode ?? "")
           : "";
 
       final List<String> addressParts = [
@@ -1331,9 +1884,9 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         checkout.user.state,
       ].where((s) => s.trim().isNotEmpty).toList();
 
-      final String shippingAddress = addressParts.isNotEmpty
-          ? addressParts.join(", ")
-          : "Delivery Address";
+      final String shippingAddress = (_userAddress != null && _userAddress!.formattedAddress.isNotEmpty)
+          ? _userAddress!.formattedAddress
+          : (addressParts.isNotEmpty ? addressParts.join(", ") : "Delivery Address");
 
       int successCount = 0;
       String lastMessage = "";
@@ -1348,17 +1901,20 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         debugPrint("ProductID: $pid");
         debugPrint("RetailerId: $retailerId");
         debugPrint("DealerId: $dealerId");
+        debugPrint("AsmId: $asmId");
         debugPrint("UserId: $_effectiveUserId");
         debugPrint("ShippingAddress: $shippingAddress");
+        debugPrint("PaymentMode: $paymentMode");
         debugPrint("========================================");
 
         final response = await order_api.ApiService.placeOrder(
           productId: pid,
           retailerId: retailerId,
           dealerId: dealerId,
+          asmId: asmId,
           userId: _effectiveUserId,
           shippingAddress: shippingAddress,
-          paymentMode: "COD",
+          paymentMode: paymentMode,
         );
 
         final bool isSuccess = response['Status'] == true ||
@@ -1530,10 +2086,16 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 // ============================================================
 class _RetailerSelectionModalBody extends StatefulWidget {
   final String? selectedRetailerId;
+  final String userState;
+  final String userBlock;
+  final String userDistrict;
   final ValueChanged<RetailerItem> onSelected;
 
   const _RetailerSelectionModalBody({
     required this.selectedRetailerId,
+    this.userState = '',
+    this.userBlock = '',
+    this.userDistrict = '',
     required this.onSelected,
   });
 
@@ -1547,7 +2109,7 @@ class _RetailerSelectionModalBodyState extends State<_RetailerSelectionModalBody
   String? _errorMessage;
   List<RetailerItem> _allRetailers = [];
   List<RetailerItem> _filteredRetailers = [];
-  String _statusFilter = 'ALL';
+  String _statusFilter = 'ALL'; // ALL, Active, Inactive
 
   @override
   void initState() {
@@ -1562,6 +2124,39 @@ class _RetailerSelectionModalBodyState extends State<_RetailerSelectionModalBody
     super.dispose();
   }
 
+  bool _matchesNormalized(String? a, String? b) {
+    if (a == null || b == null) return false;
+    final cleanA = a.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+    final cleanB = b.trim().toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
+    if (cleanA.isEmpty || cleanB.isEmpty) return false;
+    if (cleanA == cleanB) return true;
+    if (cleanA.contains(cleanB) || cleanB.contains(cleanA)) return true;
+    return false;
+  }
+
+  bool _isBlockMatch(RetailerItem item) {
+    final effectiveBlock = widget.userBlock.trim().isNotEmpty
+        ? widget.userBlock.trim()
+        : widget.userDistrict.trim();
+
+    // If no block/district is present in address, allow state matching or all
+    if (effectiveBlock.isEmpty) {
+      if (widget.userState.trim().isNotEmpty) {
+        return _matchesNormalized(item.state, widget.userState);
+      }
+      return true;
+    }
+
+    final blockMatches = _matchesNormalized(item.block, effectiveBlock) ||
+        _matchesNormalized(item.district, effectiveBlock) ||
+        _matchesNormalized(item.address, effectiveBlock);
+
+    final stateMatches = widget.userState.trim().isEmpty ||
+        _matchesNormalized(item.state, widget.userState);
+
+    return blockMatches && stateMatches;
+  }
+
   Future<void> _loadRetailers() async {
     setState(() {
       _isLoading = true;
@@ -1569,19 +2164,29 @@ class _RetailerSelectionModalBodyState extends State<_RetailerSelectionModalBody
     });
 
     try {
-      final res = await RetailerProfileService.getAllRetailers();
+      final response = await order_api.ApiService.getAllRetailers();
       if (!mounted) return;
+      _allRetailers = response.data;
       setState(() {
-        _allRetailers = res.data;
         _isLoading = false;
       });
       _filterRetailers();
     } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _errorMessage = e.toString().replaceAll("Exception: ", "");
-        _isLoading = false;
-      });
+      try {
+        final fallback = await RetailerProfileService.getAllRetailers();
+        if (!mounted) return;
+        _allRetailers = fallback.data;
+        setState(() {
+          _isLoading = false;
+        });
+        _filterRetailers();
+      } catch (e2) {
+        if (!mounted) return;
+        setState(() {
+          _errorMessage = e2.toString().replaceAll("Exception: ", "");
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -1589,25 +2194,40 @@ class _RetailerSelectionModalBodyState extends State<_RetailerSelectionModalBody
     final query = _searchController.text.trim().toLowerCase();
     setState(() {
       _filteredRetailers = _allRetailers.where((item) {
+        // 1. Strict Block Matching (Only show retailers from user's Block)
+        if (!_isBlockMatch(item)) return false;
+
+        // 2. Status Filter
         final matchesStatus = _statusFilter == 'ALL' ||
             (_statusFilter == 'Active' && item.isActive) ||
             (_statusFilter == 'Inactive' && !item.isActive);
+        if (!matchesStatus) return false;
 
+        // 3. Search Query
         final matchesQuery = query.isEmpty ||
             (item.name?.toLowerCase().contains(query) ?? false) ||
+            (item.displayName.toLowerCase().contains(query)) ||
+            (item.businessName?.toLowerCase().contains(query) ?? false) ||
+            (item.personName?.toLowerCase().contains(query) ?? false) ||
+            (item.visiterId?.toLowerCase().contains(query) ?? false) ||
             (item.retailerId?.toLowerCase().contains(query) ?? false) ||
+            (item.id?.toString().contains(query) ?? false) ||
             (item.mobile?.toLowerCase().contains(query) ?? false) ||
             (item.district?.toLowerCase().contains(query) ?? false) ||
-            (item.state?.toLowerCase().contains(query) ?? false);
+            (item.block?.toLowerCase().contains(query) ?? false) ||
+            (item.state?.toLowerCase().contains(query) ?? false) ||
+            (item.address?.toLowerCase().contains(query) ?? false);
 
-        return matchesStatus && matchesQuery;
+        return matchesQuery;
       }).toList();
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    final height = MediaQuery.of(context).size.height * 0.78;
+    final height = MediaQuery.of(context).size.height * 0.82;
+    final String activeBlockName = widget.userBlock.isNotEmpty ? widget.userBlock : widget.userDistrict;
+    final String activeStateName = widget.userState;
 
     return Container(
       height: height,
@@ -1619,12 +2239,13 @@ class _RetailerSelectionModalBodyState extends State<_RetailerSelectionModalBody
         children: [
           // Modal Drag Handle & Header
           Container(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 14),
             decoration: const BoxDecoration(
               color: AppColors.primaryGreen,
               borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
             ),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Center(
                   child: Container(
@@ -1642,7 +2263,7 @@ class _RetailerSelectionModalBodyState extends State<_RetailerSelectionModalBody
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.storefront_rounded, color: AppColors.primaryGold, size: 20),
+                        const Icon(Icons.storefront_rounded, color: AppColors.primaryGold, size: 22),
                         const SizedBox(width: 8),
                         Text(
                           "Select Retailer Partner",
@@ -1662,6 +2283,36 @@ class _RetailerSelectionModalBodyState extends State<_RetailerSelectionModalBody
                     ),
                   ],
                 ),
+                if (activeBlockName.isNotEmpty || activeStateName.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.white.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.lightGold.withOpacity(0.35)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.location_on_rounded, color: AppColors.primaryGold, size: 13),
+                        const SizedBox(width: 5),
+                        Flexible(
+                          child: Text(
+                            "My Block: ${activeBlockName.isNotEmpty ? activeBlockName : 'N/A'}${activeStateName.isNotEmpty ? ' ($activeStateName)' : ''}",
+                            style: GoogleFonts.poppins(
+                              color: AppColors.white,
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -1669,9 +2320,11 @@ class _RetailerSelectionModalBodyState extends State<_RetailerSelectionModalBody
           // Search Bar & Filter
           Container(
             color: AppColors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Search field
                 Container(
                   decoration: BoxDecoration(
                     color: AppColors.creamBackground,
@@ -1682,7 +2335,7 @@ class _RetailerSelectionModalBodyState extends State<_RetailerSelectionModalBody
                     controller: _searchController,
                     style: GoogleFonts.poppins(fontSize: 13, color: AppColors.textDark),
                     decoration: InputDecoration(
-                      hintText: "Search retailer by name, ID, phone, city...",
+                      hintText: "Search in your block by name, ID, phone...",
                       hintStyle: GoogleFonts.poppins(fontSize: 12, color: AppColors.textSecondary),
                       prefixIcon: const Icon(Icons.search, color: AppColors.primaryGreen, size: 20),
                       suffixIcon: _searchController.text.isNotEmpty
@@ -1696,20 +2349,53 @@ class _RetailerSelectionModalBodyState extends State<_RetailerSelectionModalBody
                     ),
                   ),
                 ),
+
                 const SizedBox(height: 8),
+
+                // Status Filter
                 Row(
                   children: [
-                    Text("Filter: ", style: GoogleFonts.poppins(fontSize: 11, color: AppColors.textSecondary)),
-                    _chip("ALL", "All"),
+                    Text("Status: ", style: GoogleFonts.poppins(fontSize: 11, color: AppColors.textSecondary)),
+                    _statusChip("ALL", "All"),
                     const SizedBox(width: 6),
-                    _chip("Active", "Active"),
+                    _statusChip("Active", "Active"),
                     const SizedBox(width: 6),
-                    _chip("Inactive", "Inactive"),
+                    _statusChip("Inactive", "Inactive"),
                   ],
                 ),
               ],
             ),
           ),
+
+          // Location Summary Banner
+          if (!_isLoading && _errorMessage == null)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+              color: AppColors.primaryGreen.withOpacity(0.08),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.check_circle_outline,
+                    size: 15,
+                    color: AppColors.primaryGreen,
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      _filteredRetailers.isNotEmpty
+                          ? "Showing ${_filteredRetailers.length} retailer(s) in Block '$activeBlockName'"
+                          : "No retailers found in Block '$activeBlockName'",
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primaryGreen,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
 
           // List Body
           Expanded(
@@ -1743,16 +2429,27 @@ class _RetailerSelectionModalBodyState extends State<_RetailerSelectionModalBody
                       )
                     : _filteredRetailers.isEmpty
                         ? Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.search_off, size: 48, color: AppColors.lightGold),
-                                const SizedBox(height: 8),
-                                Text(
-                                  "No matching retailers found",
-                                  style: GoogleFonts.poppins(fontSize: 13, color: AppColors.textSecondary),
-                                ),
-                              ],
+                            child: Padding(
+                              padding: const EdgeInsets.all(24.0),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.store_mall_directory_outlined, size: 48, color: AppColors.lightGold),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    "No retailers in your block",
+                                    style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textDark),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    activeBlockName.isNotEmpty
+                                        ? "There are no registered retailer partners in Block '$activeBlockName'${activeStateName.isNotEmpty ? ', $activeStateName' : ''}."
+                                        : "No retailers found matching your criteria.",
+                                    textAlign: TextAlign.center,
+                                    style: GoogleFonts.poppins(fontSize: 12, color: AppColors.textSecondary),
+                                  ),
+                                ],
+                              ),
                             ),
                           )
                         : RefreshIndicator(
@@ -1765,19 +2462,25 @@ class _RetailerSelectionModalBodyState extends State<_RetailerSelectionModalBody
                               itemBuilder: (context, index) {
                                 final item = _filteredRetailers[index];
                                 final isSelected = widget.selectedRetailerId != null &&
-                                    widget.selectedRetailerId == item.retailerId;
+                                    (widget.selectedRetailerId == item.retailerId ||
+                                     widget.selectedRetailerId == item.visiterId ||
+                                     (item.id != null && widget.selectedRetailerId == item.id.toString()));
+
+                                final String retailerCodeOrId = item.retailerId ?? item.visiterId ?? (item.id != null ? item.id.toString() : 'N/A');
 
                                 return Container(
                                   decoration: BoxDecoration(
                                     color: AppColors.white,
                                     borderRadius: BorderRadius.circular(14),
                                     border: Border.all(
-                                      color: isSelected ? AppColors.primaryGreen : AppColors.lightGold.withOpacity(0.4),
-                                      width: isSelected ? 1.8 : 1,
+                                      color: isSelected ? AppColors.primaryGreen : AppColors.primaryGreen.withOpacity(0.35),
+                                      width: isSelected ? 2.0 : 1.2,
                                     ),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.black.withOpacity(0.03),
+                                        color: isSelected
+                                            ? AppColors.primaryGreen.withOpacity(0.12)
+                                            : Colors.black.withOpacity(0.03),
                                         blurRadius: 6,
                                         offset: const Offset(0, 2),
                                       ),
@@ -1788,61 +2491,166 @@ class _RetailerSelectionModalBodyState extends State<_RetailerSelectionModalBody
                                     borderRadius: BorderRadius.circular(14),
                                     child: Padding(
                                       padding: const EdgeInsets.all(12),
-                                      child: Row(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          Container(
-                                            height: 44,
-                                            width: 44,
-                                            decoration: BoxDecoration(
-                                              shape: BoxShape.circle,
-                                              color: AppColors.primaryGreen.withOpacity(0.08),
-                                              border: Border.all(color: AppColors.primaryGold),
-                                            ),
-                                            child: const Icon(
-                                              Icons.storefront_rounded,
-                                              color: AppColors.primaryGreen,
-                                              size: 22,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  item.name ?? "Retailer Partner",
-                                                  style: GoogleFonts.poppins(
-                                                    fontSize: 13.5,
-                                                    fontWeight: FontWeight.w600,
-                                                    color: AppColors.textDark,
-                                                  ),
+                                          Row(
+                                            children: [
+                                              Container(
+                                                width: 44,
+                                                height: 44,
+                                                decoration: BoxDecoration(
+                                                  color: AppColors.primaryGreen.withOpacity(0.1),
+                                                  borderRadius: BorderRadius.circular(10),
+                                                  border: Border.all(color: AppColors.lightGold.withOpacity(0.4)),
                                                 ),
-                                                Text(
-                                                  "ID: ${item.retailerId ?? 'N/A'} • ${item.mobile ?? ''}",
-                                                  style: GoogleFonts.poppins(
-                                                    fontSize: 11.5,
-                                                    color: AppColors.textSecondary,
-                                                  ),
+                                                child: const Icon(
+                                                  Icons.store_rounded,
+                                                  color: AppColors.primaryGreen,
+                                                  size: 24,
                                                 ),
-                                                if (item.displayLocation.isNotEmpty)
-                                                  Text(
-                                                    item.displayLocation,
-                                                    maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
-                                                    style: GoogleFonts.poppins(
-                                                      fontSize: 11,
-                                                      color: AppColors.primaryGreen,
-                                                      fontWeight: FontWeight.w500,
+                                              ),
+                                              const SizedBox(width: 12),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      item.displayName,
+                                                      style: GoogleFonts.poppins(
+                                                        fontSize: 14,
+                                                        fontWeight: FontWeight.w700,
+                                                        color: AppColors.textDark,
+                                                      ),
+                                                      maxLines: 1,
+                                                      overflow: TextOverflow.ellipsis,
                                                     ),
+                                                    if (item.businessName != null && item.businessName!.isNotEmpty)
+                                                      Text(
+                                                        item.businessName!,
+                                                        style: GoogleFonts.poppins(
+                                                          fontSize: 12,
+                                                          fontWeight: FontWeight.w500,
+                                                          color: AppColors.primaryGold,
+                                                        ),
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow.ellipsis,
+                                                      ),
+                                                    Text(
+                                                      "ID: $retailerCodeOrId",
+                                                      style: GoogleFonts.poppins(
+                                                        fontSize: 11,
+                                                        color: AppColors.textSecondary,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              // Radio Selection / Check icon
+                                              Container(
+                                                width: 26,
+                                                height: 26,
+                                                decoration: BoxDecoration(
+                                                  shape: BoxShape.circle,
+                                                  color: isSelected ? AppColors.primaryGreen : Colors.transparent,
+                                                  border: Border.all(
+                                                    color: isSelected ? AppColors.primaryGreen : AppColors.lightGold,
+                                                    width: 1.8,
                                                   ),
-                                              ],
-                                            ),
+                                                ),
+                                                child: isSelected
+                                                    ? const Icon(Icons.check, size: 16, color: AppColors.white)
+                                                    : null,
+                                              ),
+                                            ],
                                           ),
-                                          Radio<bool>(
-                                            value: true,
-                                            groupValue: isSelected ? true : null,
-                                            onChanged: (_) => widget.onSelected(item),
-                                            activeColor: AppColors.primaryGreen,
+                                          const SizedBox(height: 8),
+                                          const Divider(height: 1, color: AppColors.creamBackground),
+                                          const SizedBox(height: 8),
+                                          // Details row (Phone, Block, State, Status)
+                                          Wrap(
+                                            spacing: 12,
+                                            runSpacing: 6,
+                                            crossAxisAlignment: WrapCrossAlignment.center,
+                                            children: [
+                                              if (item.mobile != null && item.mobile!.isNotEmpty)
+                                                Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    const Icon(Icons.phone_outlined, size: 12, color: AppColors.textSecondary),
+                                                    const SizedBox(width: 3),
+                                                    Text(
+                                                      item.mobile!,
+                                                      style: GoogleFonts.poppins(
+                                                        fontSize: 11,
+                                                        color: AppColors.textSecondary,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+
+                                              // Status badge
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: item.isActive
+                                                      ? AppColors.primaryGreen.withOpacity(0.12)
+                                                      : Colors.red.withOpacity(0.12),
+                                                  borderRadius: BorderRadius.circular(4),
+                                                ),
+                                                child: Text(
+                                                  item.isActive ? "Active" : "Inactive",
+                                                  style: GoogleFonts.poppins(
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: item.isActive ? AppColors.primaryGreen : AppColors.error,
+                                                  ),
+                                                ),
+                                              ),
+
+                                              // Block badge
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: AppColors.primaryGreen.withOpacity(0.1),
+                                                  borderRadius: BorderRadius.circular(4),
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    const Icon(Icons.check_circle, size: 11, color: AppColors.primaryGreen),
+                                                    const SizedBox(width: 3),
+                                                    Text(
+                                                      "Block: ${item.block?.isNotEmpty == true ? item.block : (item.district ?? 'N/A')}",
+                                                      style: GoogleFonts.poppins(
+                                                        fontSize: 10.5,
+                                                        fontWeight: FontWeight.w600,
+                                                        color: AppColors.primaryGreen,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+
+                                              if (item.displayLocation.isNotEmpty)
+                                                Padding(
+                                                  padding: const EdgeInsets.only(top: 2),
+                                                  child: Row(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      const Icon(Icons.place_outlined, size: 12, color: AppColors.textSecondary),
+                                                      const SizedBox(width: 2),
+                                                      Text(
+                                                        item.displayLocation,
+                                                        style: GoogleFonts.poppins(
+                                                          fontSize: 11,
+                                                          color: AppColors.textSecondary,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                            ],
                                           ),
                                         ],
                                       ),
@@ -1858,7 +2666,7 @@ class _RetailerSelectionModalBodyState extends State<_RetailerSelectionModalBody
     );
   }
 
-  Widget _chip(String key, String label) {
+  Widget _statusChip(String key, String label) {
     final sel = _statusFilter == key;
     return GestureDetector(
       onTap: () {
@@ -1887,34 +2695,36 @@ class _RetailerSelectionModalBodyState extends State<_RetailerSelectionModalBody
   }
 }
 
-// ============================================================
-// DEALER SELECTION MODAL BODY
-// ============================================================
-class _DealerSelectionModalBody extends StatefulWidget {
-  final String? selectedDealerId;
-  final ValueChanged<DealerProfileModel> onSelected;
 
-  const _DealerSelectionModalBody({
-    required this.selectedDealerId,
+
+// ============================================================
+// ASM SELECTION MODAL BODY
+// ============================================================
+class _AsmSelectionModalBody extends StatefulWidget {
+  final String? selectedAsmId;
+  final ValueChanged<AsmItem> onSelected;
+
+  const _AsmSelectionModalBody({
+    required this.selectedAsmId,
     required this.onSelected,
   });
 
   @override
-  State<_DealerSelectionModalBody> createState() => _DealerSelectionModalBodyState();
+  State<_AsmSelectionModalBody> createState() => _AsmSelectionModalBodyState();
 }
 
-class _DealerSelectionModalBodyState extends State<_DealerSelectionModalBody> {
+class _AsmSelectionModalBodyState extends State<_AsmSelectionModalBody> {
   final TextEditingController _searchController = TextEditingController();
   bool _isLoading = true;
   String? _errorMessage;
-  List<DealerProfileModel> _allDealers = [];
-  List<DealerProfileModel> _filteredDealers = [];
+  List<AsmItem> _allAsm = [];
+  List<AsmItem> _filteredAsm = [];
 
   @override
   void initState() {
     super.initState();
-    _searchController.addListener(_filterDealers);
-    _loadDealers();
+    _searchController.addListener(_filterAsm);
+    _loadAsm();
   }
 
   @override
@@ -1923,39 +2733,53 @@ class _DealerSelectionModalBodyState extends State<_DealerSelectionModalBody> {
     super.dispose();
   }
 
-  Future<void> _loadDealers() async {
+  Future<void> _loadAsm() async {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
 
     try {
-      final list = await DealerProfileService.getAllDealers();
+      final response = await order_api.ApiService.getASMList();
       if (!mounted) return;
       setState(() {
-        _allDealers = list;
+        _allAsm = response.data;
         _isLoading = false;
       });
-      _filterDealers();
+      _filterAsm();
     } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _errorMessage = e.toString().replaceAll("Exception: ", "");
-        _isLoading = false;
-      });
+      try {
+        final fallback = await RetailerProfileService.getAsmList();
+        if (!mounted) return;
+        setState(() {
+          _allAsm = fallback.data;
+          _isLoading = false;
+        });
+        _filterAsm();
+      } catch (e2) {
+        if (!mounted) return;
+        setState(() {
+          _errorMessage = e2.toString().replaceAll("Exception: ", "");
+          _isLoading = false;
+        });
+      }
     }
   }
 
-  void _filterDealers() {
+  void _filterAsm() {
     final query = _searchController.text.trim().toLowerCase();
     setState(() {
-      _filteredDealers = _allDealers.where((d) {
+      _filteredAsm = _allAsm.where((asm) {
         return query.isEmpty ||
-            (d.name?.toLowerCase().contains(query) ?? false) ||
-            (d.dealerId?.toLowerCase().contains(query) ?? false) ||
-            (d.phone?.toLowerCase().contains(query) ?? false) ||
-            (d.businessAddress?.toLowerCase().contains(query) ?? false) ||
-            (d.gstNumber?.toLowerCase().contains(query) ?? false);
+            (asm.name?.toLowerCase().contains(query) ?? false) ||
+            (asm.empId?.toLowerCase().contains(query) ?? false) ||
+            (asm.employeeCode?.toLowerCase().contains(query) ?? false) ||
+            (asm.mrId?.toLowerCase().contains(query) ?? false) ||
+            (asm.mobile?.toLowerCase().contains(query) ?? false) ||
+            (asm.email?.toLowerCase().contains(query) ?? false) ||
+            (asm.district?.toLowerCase().contains(query) ?? false) ||
+            (asm.state?.toLowerCase().contains(query) ?? false) ||
+            (asm.block?.toLowerCase().contains(query) ?? false);
       }).toList();
     });
   }
@@ -1997,10 +2821,10 @@ class _DealerSelectionModalBodyState extends State<_DealerSelectionModalBody> {
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.business_rounded, color: AppColors.primaryGold, size: 20),
+                        const Icon(Icons.military_tech_rounded, color: AppColors.primaryGold, size: 20),
                         const SizedBox(width: 8),
                         Text(
-                          "Select Dealer Partner",
+                          "Select ASM Partner",
                           style: GoogleFonts.poppins(
                             color: AppColors.white,
                             fontSize: 16,
@@ -2035,7 +2859,7 @@ class _DealerSelectionModalBodyState extends State<_DealerSelectionModalBody> {
                 controller: _searchController,
                 style: GoogleFonts.poppins(fontSize: 13, color: AppColors.textDark),
                 decoration: InputDecoration(
-                  hintText: "Search dealer by name, ID, phone, address...",
+                  hintText: "Search ASM by name, Emp ID, mobile, district...",
                   hintStyle: GoogleFonts.poppins(fontSize: 12, color: AppColors.textSecondary),
                   prefixIcon: const Icon(Icons.search, color: AppColors.primaryGreen, size: 20),
                   suffixIcon: _searchController.text.isNotEmpty
@@ -2073,7 +2897,7 @@ class _DealerSelectionModalBodyState extends State<_DealerSelectionModalBody> {
                               ),
                               const SizedBox(height: 12),
                               ElevatedButton(
-                                onPressed: _loadDealers,
+                                onPressed: _loadAsm,
                                 style: ElevatedButton.styleFrom(backgroundColor: AppColors.primaryGreen),
                                 child: Text("Retry", style: GoogleFonts.poppins(fontSize: 12, color: AppColors.white)),
                               ),
@@ -2081,7 +2905,7 @@ class _DealerSelectionModalBodyState extends State<_DealerSelectionModalBody> {
                           ),
                         ),
                       )
-                    : _filteredDealers.isEmpty
+                    : _filteredAsm.isEmpty
                         ? Center(
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
@@ -2089,23 +2913,23 @@ class _DealerSelectionModalBodyState extends State<_DealerSelectionModalBody> {
                                 const Icon(Icons.search_off, size: 48, color: AppColors.lightGold),
                                 const SizedBox(height: 8),
                                 Text(
-                                  "No matching dealers found",
+                                  "No matching ASM executives found",
                                   style: GoogleFonts.poppins(fontSize: 13, color: AppColors.textSecondary),
                                 ),
                               ],
                             ),
                           )
                         : RefreshIndicator(
-                            onRefresh: _loadDealers,
+                            onRefresh: _loadAsm,
                             color: AppColors.primaryGreen,
                             child: ListView.separated(
                               padding: const EdgeInsets.all(14),
-                              itemCount: _filteredDealers.length,
+                              itemCount: _filteredAsm.length,
                               separatorBuilder: (_, __) => const SizedBox(height: 10),
                               itemBuilder: (context, index) {
-                                final dealer = _filteredDealers[index];
-                                final isSelected = widget.selectedDealerId != null &&
-                                    widget.selectedDealerId == dealer.dealerId;
+                                final asm = _filteredAsm[index];
+                                final isSelected = widget.selectedAsmId != null &&
+                                    (widget.selectedAsmId == asm.empId || widget.selectedAsmId == asm.employeeCode);
 
                                 return Container(
                                   decoration: BoxDecoration(
@@ -2117,73 +2941,216 @@ class _DealerSelectionModalBodyState extends State<_DealerSelectionModalBody> {
                                     ),
                                     boxShadow: [
                                       BoxShadow(
-                                        color: Colors.black.withOpacity(0.03),
+                                        color: isSelected
+                                            ? AppColors.primaryGreen.withOpacity(0.12)
+                                            : Colors.black.withOpacity(0.03),
                                         blurRadius: 6,
                                         offset: const Offset(0, 2),
                                       ),
                                     ],
                                   ),
                                   child: InkWell(
-                                    onTap: () => widget.onSelected(dealer),
+                                    onTap: () => widget.onSelected(asm),
                                     borderRadius: BorderRadius.circular(14),
                                     child: Padding(
                                       padding: const EdgeInsets.all(12),
-                                      child: Row(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
-                                          Container(
-                                            height: 44,
-                                            width: 44,
-                                            decoration: BoxDecoration(
-                                              shape: BoxShape.circle,
-                                              color: AppColors.primaryGreen.withOpacity(0.08),
-                                              border: Border.all(color: AppColors.primaryGold),
-                                            ),
-                                            child: const Icon(
-                                              Icons.business_rounded,
-                                              color: AppColors.primaryGreen,
-                                              size: 22,
-                                            ),
+                                          Row(
+                                            children: [
+                                              Container(
+                                                height: 44,
+                                                width: 44,
+                                                decoration: BoxDecoration(
+                                                  shape: BoxShape.circle,
+                                                  color: AppColors.primaryGreen.withOpacity(0.08),
+                                                  border: Border.all(color: AppColors.primaryGold),
+                                                ),
+                                                child: asm.resolvedImageUrl.isNotEmpty
+                                                    ? ClipOval(
+                                                        child: Image.network(
+                                                          asm.resolvedImageUrl,
+                                                          fit: BoxFit.cover,
+                                                          errorBuilder: (_, __, ___) => const Icon(
+                                                            Icons.military_tech_rounded,
+                                                            color: AppColors.primaryGreen,
+                                                            size: 22,
+                                                          ),
+                                                        ),
+                                                      )
+                                                    : const Icon(
+                                                        Icons.military_tech_rounded,
+                                                        color: AppColors.primaryGreen,
+                                                        size: 22,
+                                                      ),
+                                              ),
+                                              const SizedBox(width: 12),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  children: [
+                                                    Row(
+                                                      children: [
+                                                        Flexible(
+                                                          child: Text(
+                                                            asm.displayName,
+                                                            style: GoogleFonts.poppins(
+                                                              fontSize: 14,
+                                                              fontWeight: FontWeight.bold,
+                                                              color: AppColors.textDark,
+                                                            ),
+                                                            maxLines: 1,
+                                                            overflow: TextOverflow.ellipsis,
+                                                          ),
+                                                        ),
+                                                        const SizedBox(width: 6),
+                                                        Container(
+                                                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1.5),
+                                                          decoration: BoxDecoration(
+                                                            color: AppColors.primaryGreen,
+                                                            borderRadius: BorderRadius.circular(4),
+                                                          ),
+                                                          child: Text(
+                                                            "ID: ${asm.displayId}",
+                                                            style: GoogleFonts.poppins(
+                                                              fontSize: 10,
+                                                              fontWeight: FontWeight.w600,
+                                                              color: AppColors.white,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    if (asm.mobile != null && asm.mobile!.isNotEmpty) ...[
+                                                      const SizedBox(height: 2),
+                                                      Row(
+                                                        children: [
+                                                          const Icon(Icons.phone_outlined, size: 12, color: AppColors.textSecondary),
+                                                          const SizedBox(width: 3),
+                                                          Text(
+                                                            asm.mobile!,
+                                                            style: GoogleFonts.poppins(
+                                                              fontSize: 11.5,
+                                                              color: AppColors.textSecondary,
+                                                            ),
+                                                          ),
+                                                        ],
+                                                      ),
+                                                    ],
+                                                  ],
+                                                ),
+                                              ),
+                                              Radio<bool>(
+                                                value: true,
+                                                groupValue: isSelected ? true : null,
+                                                onChanged: (_) => widget.onSelected(asm),
+                                                activeColor: AppColors.primaryGreen,
+                                              ),
+                                            ],
                                           ),
-                                          const SizedBox(width: 12),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                          const SizedBox(height: 8),
+                                          const Divider(height: 1, color: AppColors.creamBackground),
+                                          const SizedBox(height: 6),
+                                          // Address, State, Country details
+                                          Wrap(
+                                            spacing: 6,
+                                            runSpacing: 4,
+                                            crossAxisAlignment: WrapCrossAlignment.center,
+                                            children: [
+                                              // Country Badge
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.blue.shade50,
+                                                  borderRadius: BorderRadius.circular(4),
+                                                  border: Border.all(color: Colors.blue.shade200),
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Icon(Icons.public, size: 11, color: Colors.blue.shade700),
+                                                    const SizedBox(width: 3),
+                                                    Text(
+                                                      "Country: ${asm.country?.isNotEmpty == true ? asm.country : 'India'}",
+                                                      style: GoogleFonts.poppins(
+                                                        fontSize: 10,
+                                                        fontWeight: FontWeight.w600,
+                                                        color: Colors.blue.shade800,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                              // State Badge
+                                              if (asm.state != null && asm.state!.isNotEmpty)
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: AppColors.primaryGreen.withOpacity(0.1),
+                                                    borderRadius: BorderRadius.circular(4),
+                                                    border: Border.all(color: AppColors.primaryGreen.withOpacity(0.3)),
+                                                  ),
+                                                  child: Row(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      const Icon(Icons.location_city_rounded, size: 11, color: AppColors.primaryGreen),
+                                                      const SizedBox(width: 3),
+                                                      Text(
+                                                        "State: ${asm.state}",
+                                                        style: GoogleFonts.poppins(
+                                                          fontSize: 10,
+                                                          fontWeight: FontWeight.w600,
+                                                          color: AppColors.primaryGreen,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                              // District Badge
+                                              if (asm.district != null && asm.district!.isNotEmpty)
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                  decoration: BoxDecoration(
+                                                    color: AppColors.creamBackground,
+                                                    borderRadius: BorderRadius.circular(4),
+                                                    border: Border.all(color: AppColors.lightGold.withOpacity(0.5)),
+                                                  ),
+                                                  child: Row(
+                                                    mainAxisSize: MainAxisSize.min,
+                                                    children: [
+                                                      const Icon(Icons.place_outlined, size: 11, color: AppColors.deepGold),
+                                                      const SizedBox(width: 3),
+                                                      Text(
+                                                        "District: ${asm.district}",
+                                                        style: GoogleFonts.poppins(
+                                                          fontSize: 10,
+                                                          fontWeight: FontWeight.w500,
+                                                          color: AppColors.textDark,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
+                                            ],
+                                          ),
+                                          if (asm.address != null && asm.address!.isNotEmpty) ...[
+                                            const SizedBox(height: 4),
+                                            Row(
                                               children: [
-                                                Text(
-                                                  dealer.name ?? "Authorized Dealer",
-                                                  style: GoogleFonts.poppins(
-                                                    fontSize: 13.5,
-                                                    fontWeight: FontWeight.w600,
-                                                    color: AppColors.textDark,
-                                                  ),
-                                                ),
-                                                Text(
-                                                  "ID: ${dealer.dealerId ?? 'N/A'} • ${dealer.phone ?? ''}",
-                                                  style: GoogleFonts.poppins(
-                                                    fontSize: 11.5,
-                                                    color: AppColors.textSecondary,
-                                                  ),
-                                                ),
-                                                if (dealer.businessAddress != null && dealer.businessAddress!.isNotEmpty)
-                                                  Text(
-                                                    dealer.businessAddress!,
+                                                const Icon(Icons.home_outlined, size: 12, color: AppColors.textSecondary),
+                                                const SizedBox(width: 4),
+                                                Expanded(
+                                                  child: Text(
+                                                    "Address: ${asm.address}",
+                                                    style: GoogleFonts.poppins(fontSize: 10.5, color: AppColors.textSecondary),
                                                     maxLines: 1,
                                                     overflow: TextOverflow.ellipsis,
-                                                    style: GoogleFonts.poppins(
-                                                      fontSize: 11,
-                                                      color: AppColors.primaryGreen,
-                                                      fontWeight: FontWeight.w500,
-                                                    ),
                                                   ),
+                                                ),
                                               ],
                                             ),
-                                          ),
-                                          Radio<bool>(
-                                            value: true,
-                                            groupValue: isSelected ? true : null,
-                                            onChanged: (_) => widget.onSelected(dealer),
-                                            activeColor: AppColors.primaryGreen,
-                                          ),
+                                          ],
                                         ],
                                       ),
                                     ),

@@ -233,7 +233,7 @@ class _CartScreenState extends State<CartScreen> {
     final String? rawImg = item["Image"]?.toString();
 
     final String imgUrl = (rawImg != null && rawImg.isNotEmpty)
-        ? (rawImg.startsWith('http') ? rawImg : 'https://durvasaayurved.online$rawImg')
+        ? (rawImg.startsWith('http') ? rawImg : 'https://durvasaayurved.com$rawImg')
         : '';
 
     final int discount = (listedPrice > sellingPrice && listedPrice > 0)

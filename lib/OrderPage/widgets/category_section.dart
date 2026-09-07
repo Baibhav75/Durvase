@@ -121,7 +121,7 @@ class CategorySection extends StatelessWidget {
   Widget _buildCategoryItem(BuildContext context, Category cat) {
     final imageUrl = cat.image.startsWith('http')
         ? cat.image
-        : 'https://durvasaayurved.online${cat.image}';
+        : 'https://durvasaayurved.com${cat.image}';
 
     return Container(
       width: 76,

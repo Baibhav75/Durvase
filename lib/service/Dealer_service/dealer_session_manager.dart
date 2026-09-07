@@ -2,16 +2,24 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../model/Dealer_Model/dealer_login_model.dart';
+import '../session_manager.dart';
 
 class DealerSessionManager {
   static const String _prefsKey = 'dealer_login_data';
   static const String _isLoggedInKey = 'dealer_is_logged_in';
   static const String _dealerIdKey = 'dealer_id';
+  static const String _loginDataKey = 'dealer_login_data_id';
+  static const String _visiterIdKey = 'dealer_visiter_id';
   static const String _nameKey = 'dealer_name';
   static const String _emailKey = 'dealer_email';
   static const String _mobileKey = 'dealer_mobile';
-  static const String _gstKey = 'dealer_gst';
+  static const String _businessNameKey = 'dealer_business_name';
   static const String _addressKey = 'dealer_address';
+  static const String _purposeKey = 'dealer_purpose';
+  static const String _photoKey = 'dealer_photo';
+  static const String _stateKey = 'dealer_state';
+  static const String _districtKey = 'dealer_district';
+  static const String _gstKey = 'dealer_gst';
 
   static const String _savedMobileKey = 'saved_dealer_mobile';
   static const String _savedPasswordKey = 'saved_dealer_password';
@@ -33,6 +41,14 @@ class DealerSessionManager {
       if (dealer.dealerId.isNotEmpty) {
         await prefs.setString(_dealerIdKey, dealer.dealerId);
       }
+      if (dealer.loginData.isNotEmpty) {
+        await prefs.setString(_loginDataKey, dealer.loginData);
+      }
+      if (dealer.visiterId.isNotEmpty) {
+        await prefs.setString(_visiterIdKey, dealer.visiterId);
+        // Also synchronize with global SessionManager for ordering / visiting compatibility
+        await SessionManager.saveVisiterId(dealer.visiterId);
+      }
       if (dealer.name.isNotEmpty) {
         await prefs.setString(_nameKey, dealer.name);
       }
@@ -42,15 +58,30 @@ class DealerSessionManager {
       if (dealer.phone.isNotEmpty) {
         await prefs.setString(_mobileKey, dealer.phone);
       }
-      if (dealer.gstNumber.isNotEmpty) {
-        await prefs.setString(_gstKey, dealer.gstNumber);
+      if (dealer.businessName.isNotEmpty) {
+        await prefs.setString(_businessNameKey, dealer.businessName);
       }
       if (dealer.businessAddress.isNotEmpty) {
         await prefs.setString(_addressKey, dealer.businessAddress);
       }
+      if (dealer.purpose.isNotEmpty) {
+        await prefs.setString(_purposeKey, dealer.purpose);
+      }
+      if (dealer.photo.isNotEmpty) {
+        await prefs.setString(_photoKey, dealer.photo);
+      }
+      if (dealer.state.isNotEmpty) {
+        await prefs.setString(_stateKey, dealer.state);
+      }
+      if (dealer.district.isNotEmpty) {
+        await prefs.setString(_districtKey, dealer.district);
+      }
+      if (dealer.gstNumber.isNotEmpty) {
+        await prefs.setString(_gstKey, dealer.gstNumber);
+      }
 
       debugPrint(
-        '✅ Dealer session saved - Data: $savedData, Flag: $savedFlag, DealerID: ${dealer.dealerId}',
+        '✅ Dealer session saved - Data: $savedData, Flag: $savedFlag, DealerID: ${dealer.dealerId}, VisiterId: ${dealer.visiterId}',
       );
       return savedData && savedFlag;
     } catch (e, stackTrace) {
@@ -116,16 +147,23 @@ class DealerSessionManager {
       }
 
       // Fallback: recover from individual keys
-      final storedDealerId = prefs.getString(_dealerIdKey);
+      final storedDealerId = prefs.getString(_dealerIdKey) ?? prefs.getString(_visiterIdKey) ?? prefs.getString(_loginDataKey);
       if (isLoggedInFlag && storedDealerId != null && storedDealerId.isNotEmpty) {
         debugPrint('Recovering dealer session from individual stored preferences...');
         final recoveredModel = DealerModel(
           dealerId: storedDealerId,
+          loginData: prefs.getString(_loginDataKey) ?? '',
+          visiterId: prefs.getString(_visiterIdKey) ?? storedDealerId,
           name: prefs.getString(_nameKey) ?? '',
           email: prefs.getString(_emailKey) ?? '',
           phone: prefs.getString(_mobileKey) ?? '',
-          gstNumber: prefs.getString(_gstKey) ?? '',
+          businessName: prefs.getString(_businessNameKey) ?? '',
           businessAddress: prefs.getString(_addressKey) ?? '',
+          purpose: prefs.getString(_purposeKey) ?? 'Dealer',
+          photo: prefs.getString(_photoKey) ?? '',
+          state: prefs.getString(_stateKey) ?? '',
+          district: prefs.getString(_districtKey) ?? '',
+          gstNumber: prefs.getString(_gstKey) ?? '',
         );
 
         await saveLoginData(recoveredModel);
@@ -147,7 +185,9 @@ class DealerSessionManager {
       if (!isLoggedInFlag) return false;
 
       final hasJson = (prefs.getString(_prefsKey)?.isNotEmpty ?? false);
-      final hasDealerId = (prefs.getString(_dealerIdKey)?.isNotEmpty ?? false);
+      final hasDealerId = (prefs.getString(_dealerIdKey)?.isNotEmpty ?? false) ||
+          (prefs.getString(_visiterIdKey)?.isNotEmpty ?? false) ||
+          (prefs.getString(_loginDataKey)?.isNotEmpty ?? false);
 
       return hasJson || hasDealerId;
     } catch (e, stackTrace) {
@@ -158,7 +198,7 @@ class DealerSessionManager {
   }
 
   static bool _hasValidUserData(DealerModel model) {
-    return model.dealerId.isNotEmpty || model.phone.isNotEmpty || model.name.isNotEmpty;
+    return model.dealerId.isNotEmpty || model.visiterId.isNotEmpty || model.phone.isNotEmpty || model.name.isNotEmpty;
   }
 
   static Future<void> logout() async {
@@ -167,11 +207,18 @@ class DealerSessionManager {
 
       await prefs.remove(_prefsKey);
       await prefs.remove(_dealerIdKey);
+      await prefs.remove(_loginDataKey);
+      await prefs.remove(_visiterIdKey);
       await prefs.remove(_nameKey);
       await prefs.remove(_emailKey);
       await prefs.remove(_mobileKey);
-      await prefs.remove(_gstKey);
+      await prefs.remove(_businessNameKey);
       await prefs.remove(_addressKey);
+      await prefs.remove(_purposeKey);
+      await prefs.remove(_photoKey);
+      await prefs.remove(_stateKey);
+      await prefs.remove(_districtKey);
+      await prefs.remove(_gstKey);
 
       await prefs.setBool(_isLoggedInKey, false);
 
@@ -187,7 +234,17 @@ class DealerSessionManager {
   // --- Convenience Getters ---
   static Future<String?> getDealerId() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_dealerIdKey);
+    return prefs.getString(_dealerIdKey) ?? prefs.getString(_visiterIdKey);
+  }
+
+  static Future<String?> getVisiterId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_visiterIdKey) ?? prefs.getString(_dealerIdKey);
+  }
+
+  static Future<String?> getLoginDataId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_loginDataKey);
   }
 
   static Future<String?> getName() async {
@@ -198,5 +255,35 @@ class DealerSessionManager {
   static Future<String?> getMobile() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_mobileKey);
+  }
+
+  static Future<String?> getBusinessName() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_businessNameKey);
+  }
+
+  static Future<String?> getAddress() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_addressKey);
+  }
+
+  static Future<String?> getPhotoUrl() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_photoKey);
+  }
+
+  static Future<String?> getState() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_stateKey);
+  }
+
+  static Future<String?> getDistrict() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_districtKey);
+  }
+
+  static Future<String?> getPurpose() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_purposeKey);
   }
 }

@@ -4,16 +4,17 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
-import '/service/visitor_service.dart';
-import '/service/dynamic_location_service.dart'; // Added import for dynamic location service
-import '../model/TodoModel1.dart'; // For employee data
-// Added import for location data model
+
+import '../constants/app_colors.dart';
+import '../model/TodoModel1.dart';
 import '/model/location_dart_model.dart';
+import '/service/dynamic_location_service.dart';
+import '/service/visitor_service.dart';
 
 class NewVisitForm extends StatefulWidget {
   final Data1? employeeData;
 
-  const NewVisitForm({Key? key, this.employeeData}) : super(key: key);
+  const NewVisitForm({super.key, this.employeeData});
 
   @override
   _NewVisitFormState createState() => _NewVisitFormState();
@@ -52,33 +53,25 @@ class _NewVisitFormState extends State<NewVisitForm> {
   final mobileController = TextEditingController();
   final addressController = TextEditingController();
   final remarksController = TextEditingController();
+  final passwordController = TextEditingController();
 
   final List<String> purposes = ['Meeting', 'Survey', 'Follow-up'];
 
   @override
   void initState() {
     super.initState();
-    _printEmployeeDetails();
     _loadLocationData();
   }
 
-  void _printEmployeeDetails() {
-    print('Employee Details:');
-    print('Name: ${widget.employeeData?.name}');
-    print('Mobile: ${widget.employeeData?.mobile}');
-    print('Employee ID: ${widget.employeeData?.employeeId}');
-    print('Emp ID: ${widget.employeeData?.empId}');
-    print('Employee Type: ${widget.employeeData?.employeeType}');
-
-    // Debug: Check if we have any ID field
-    if (widget.employeeData?.employeeId == null &&
-        widget.employeeData?.empId == null) {
-      print('❌ ERROR: No employee ID available!');
-    } else {
-      print(
-        '✅ Employee ID available: ${widget.employeeData?.employeeId ?? widget.employeeData?.empId}',
-      );
-    }
+  @override
+  void dispose() {
+    businessNameController.dispose();
+    personNameController.dispose();
+    mobileController.dispose();
+    addressController.dispose();
+    remarksController.dispose();
+    passwordController.dispose();
+    super.dispose();
   }
 
   // Load location data from API
@@ -89,11 +82,8 @@ class _NewVisitFormState extends State<NewVisitForm> {
     if (employeeId == null || employeeId.isEmpty) {
       setState(() {
         _locationError =
-        'Employee ID not available. Please try again or contact support.';
+            'Employee ID not available. Please try again or contact support.';
       });
-      print(
-        '❌ Employee ID not available. employeeId: ${widget.employeeData?.employeeId}, empId: ${widget.employeeData?.empId}',
-      );
       return;
     }
 
@@ -103,31 +93,33 @@ class _NewVisitFormState extends State<NewVisitForm> {
     });
 
     try {
-      print('📤 Fetching location data for employee ID: $employeeId');
       final locationData = await DynamicLocationService.getLocationData(
         employeeId,
       );
 
-      setState(() {
-        _locationData = locationData;
-        _states = locationData?.states ?? [];
-        _isLoadingLocationData = false;
+      if (mounted) {
+        setState(() {
+          _locationData = locationData;
+          _states = locationData?.states ?? [];
+          _isLoadingLocationData = false;
 
-        // Set default selections if available
-        if (_states.isNotEmpty) {
-          selectedState = _states.first.name;
-          _updateDistricts(_states.first);
-        } else {
-          _locationError = 'No location data available for this employee.';
-        }
-      });
+          // Set default selections if available
+          if (_states.isNotEmpty) {
+            selectedState = _states.first.name;
+            _updateDistricts(_states.first);
+          } else {
+            _locationError = 'No location data available for this employee.';
+          }
+        });
+      }
     } catch (e) {
-      print('❌ Error loading location data: $e');
-      setState(() {
-        _isLoadingLocationData = false;
-        _locationError =
-        'Failed to load location data. Please check your internet connection and try again.';
-      });
+      if (mounted) {
+        setState(() {
+          _isLoadingLocationData = false;
+          _locationError =
+              'Failed to load location data. Please check your connection and retry.';
+        });
+      }
     }
   }
 
@@ -138,7 +130,6 @@ class _NewVisitFormState extends State<NewVisitForm> {
       _blocks = [];
       selectedBlock = null;
 
-      // Update blocks if district is available
       if (_districts.isNotEmpty) {
         _updateBlocks(_districts.first);
       }
@@ -156,7 +147,7 @@ class _NewVisitFormState extends State<NewVisitForm> {
     if (newStateName == null) return;
 
     final selectedStateItem = _states.firstWhere(
-          (state) => state.name == newStateName,
+      (state) => state.name == newStateName,
       orElse: () => LocationItem(),
     );
 
@@ -177,7 +168,7 @@ class _NewVisitFormState extends State<NewVisitForm> {
     if (newDistrictName == null) return;
 
     final selectedDistrictItem = _districts.firstWhere(
-          (district) => district.name == newDistrictName,
+      (district) => district.name == newDistrictName,
       orElse: () => LocationItem(),
     );
 
@@ -204,8 +195,7 @@ class _NewVisitFormState extends State<NewVisitForm> {
     try {
       final bytes = imageFile.readAsBytesSync();
       return base64Encode(bytes);
-    } catch (e) {
-      print('❌ Error converting image to base64: $e');
+    } catch (_) {
       return null;
     }
   }
@@ -230,8 +220,7 @@ class _NewVisitFormState extends State<NewVisitForm> {
       }
 
       return status.isGranted;
-    } catch (e) {
-      print('❌ Permission error: $e');
+    } catch (_) {
       return false;
     }
   }
@@ -240,22 +229,32 @@ class _NewVisitFormState extends State<NewVisitForm> {
     showDialog(
       context: context,
       builder: (BuildContext context) => AlertDialog(
-        title: Text('Camera Permission Required', style: GoogleFonts.poppins()),
+        backgroundColor: AppColors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'Camera Permission Required',
+          style: GoogleFonts.poppins(fontWeight: FontWeight.w700, color: AppColors.textDark),
+        ),
         content: Text(
-          'Please enable camera permission from app settings to capture images.',
-          style: GoogleFonts.poppins(),
+          'Please enable camera permission from app settings to capture visit site images.',
+          style: GoogleFonts.poppins(color: AppColors.textSecondary),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Cancel', style: GoogleFonts.poppins()),
+            child: Text('Cancel', style: GoogleFonts.poppins(color: AppColors.textSecondary)),
           ),
-          TextButton(
+          ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
               openAppSettings();
             },
-            child: Text('Open Settings', style: GoogleFonts.poppins()),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primaryGreen,
+              foregroundColor: AppColors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            child: Text('Open Settings', style: GoogleFonts.poppins(color: AppColors.white)),
           ),
         ],
       ),
@@ -271,7 +270,7 @@ class _NewVisitFormState extends State<NewVisitForm> {
       }
 
       final XFile? pickedFile = await _imagePicker.pickImage(
-        source: ImageSource.camera, // Only camera, no gallery option
+        source: ImageSource.camera,
         preferredCameraDevice: CameraDevice.rear,
         maxWidth: 1200,
         maxHeight: 1200,
@@ -283,47 +282,11 @@ class _NewVisitFormState extends State<NewVisitForm> {
           _capturedImage = File(pickedFile.path);
         });
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('✅ Image captured successfully!'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ),
-        );
+        _showSnackBar('Image captured successfully', AppColors.primaryGreen);
       }
-    } catch (e) {
-      print('❌ Error capturing image: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('❌ Failed to capture image. Please try again.'),
-          backgroundColor: Colors.red,
-        ),
-      );
+    } catch (_) {
+      _showSnackBar('Failed to capture image. Please try again.', AppColors.error);
     }
-  }
-
-  Future<ImageSource?> _showImageSourceDialog() async {
-    return await showDialog<ImageSource>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Select Image Source', style: GoogleFonts.poppins()),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: Icon(Icons.camera_alt, color: Colors.green),
-              title: Text('Take Photo', style: GoogleFonts.poppins()),
-              onTap: () => Navigator.pop(context, ImageSource.camera),
-            ),
-            ListTile(
-              leading: Icon(Icons.photo_library, color: Colors.blue),
-              title: Text('Choose from Gallery', style: GoogleFonts.poppins()),
-              onTap: () => Navigator.pop(context, ImageSource.gallery),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   void _removeImage() {
@@ -336,15 +299,19 @@ class _NewVisitFormState extends State<NewVisitForm> {
   Future<void> _selectReVisitDate() async {
     final DateTime? picked = await showDatePicker(
       context: context,
-      initialDate: DateTime.now().add(Duration(days: 1)),
-      firstDate: DateTime.now().add(Duration(days: 1)),
+      initialDate: DateTime.now().add(const Duration(days: 1)),
+      firstDate: DateTime.now().add(const Duration(days: 1)),
       lastDate: DateTime(2100),
       builder: (BuildContext context, Widget? child) {
         return Theme(
           data: ThemeData.light().copyWith(
-            primaryColor: Colors.green[700],
-            colorScheme: ColorScheme.light(primary: Colors.green[700]!),
-            buttonTheme: ButtonThemeData(textTheme: ButtonTextTheme.primary),
+            primaryColor: AppColors.primaryGreen,
+            colorScheme: const ColorScheme.light(
+              primary: AppColors.primaryGreen,
+              onPrimary: AppColors.white,
+              surface: AppColors.white,
+              onSurface: AppColors.textDark,
+            ),
           ),
           child: child!,
         );
@@ -358,93 +325,66 @@ class _NewVisitFormState extends State<NewVisitForm> {
     }
   }
 
-  // Format date for display
   String _formatDate(DateTime date) {
     return '${date.day}/${date.month}/${date.year}';
   }
 
+  void _showSnackBar(String message, Color color) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: GoogleFonts.poppins(color: AppColors.white, fontSize: 13)),
+        backgroundColor: color,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
   // Form validation
   bool _validateForm() {
-    if (businessNameController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('❌ Please enter business name'),
-          backgroundColor: Colors.red,
-        ),
-      );
+    if (businessNameController.text.trim().isEmpty) {
+      _showSnackBar('Please enter business name', AppColors.warning);
       return false;
     }
 
-    if (personNameController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('❌ Please enter person name'),
-          backgroundColor: Colors.red,
-        ),
-      );
+    if (passwordController.text.trim().isEmpty) {
+      _showSnackBar('Please enter password', AppColors.warning);
       return false;
     }
 
-    if (mobileController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('❌ Please enter mobile number'),
-          backgroundColor: Colors.red,
-        ),
-      );
+    if (personNameController.text.trim().isEmpty) {
+      _showSnackBar('Please enter contact person name', AppColors.warning);
       return false;
     }
 
-    if (mobileController.text.length != 10) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('❌ Please enter a valid 10-digit mobile number'),
-          backgroundColor: Colors.red,
-        ),
-      );
+    if (mobileController.text.trim().isEmpty) {
+      _showSnackBar('Please enter mobile number', AppColors.warning);
       return false;
     }
 
-    // Only validate location fields if we have location data available
+    if (mobileController.text.trim().length != 10) {
+      _showSnackBar('Please enter a valid 10-digit mobile number', AppColors.warning);
+      return false;
+    }
+
     if (_states.isNotEmpty) {
       if (selectedState == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('❌ Please select state'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        _showSnackBar('Please select state', AppColors.warning);
         return false;
       }
-
       if (selectedDistrict == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('❌ Please select district'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        _showSnackBar('Please select district', AppColors.warning);
         return false;
       }
-
       if (selectedBlock == null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('❌ Please select block'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        _showSnackBar('Please select block', AppColors.warning);
         return false;
       }
     }
 
     if (reVisitRequired == true && _selectedReVisitDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('❌ Please select a re-visit date'),
-          backgroundColor: Colors.red,
-        ),
-      );
+      _showSnackBar('Please select a re-visit date', AppColors.warning);
       return false;
     }
 
@@ -462,48 +402,39 @@ class _NewVisitFormState extends State<NewVisitForm> {
     });
 
     try {
-      // Get employee details
       final String empType = widget.employeeData?.employeeType ?? "Employee";
       final String empMobile = widget.employeeData?.mobile ?? "";
       final String empName = widget.employeeData?.name ?? "Unknown Employee";
-      final String empId = widget.employeeData?.employeeId ?? "EMP000000";
+      final String empId = widget.employeeData?.employeeId ?? widget.employeeData?.empId ?? "EMP000000";
+      final String visitDate = _formatDateForAPI(DateTime.now());
+      final String empPassword = passwordController.text.trim();
 
-      print('🚀 Submitting visit data:');
-      print('   👤 Employee: $empName ($empId)');
-      print('   📞 Mobile: $empMobile');
-      print('   🏢 Type: $empType');
-      print('   🏥 Visit Type: $visitType');
-      print('   🏢 Business: ${businessNameController.text}');
-      print('   👨 Person: ${personNameController.text}');
-      print('   📍 State: $selectedState');
-      print('   📍 District: $selectedDistrict');
-      print('   📍 Block: $selectedBlock');
-      print('   📅 Re-Visited: ${reVisitRequired == true ? 'Yes' : 'No'}');
-      
       final calculatedRevisitDate = reVisitRequired == true && _selectedReVisitDate != null
           ? _formatDateForAPI(_selectedReVisitDate!)
           : null;
-      print('   📅 RevisitDate (Formatted): $calculatedRevisitDate');
 
       final result = await VisitorService.submitVisitorData(
         empType: empType,
         empMobile: empMobile,
         empName: empName,
         empId: empId,
+        employeeId: empId,
+        password: empPassword,
         visitFor: visitType,
         country: 'India',
         state: selectedState ?? widget.employeeData?.state ?? '',
         district: selectedDistrict ?? widget.employeeData?.district ?? '',
         block: selectedBlock ?? widget.employeeData?.block ?? '',
-        businessName: businessNameController.text,
-        personName: personNameController.text,
-        mobile: mobileController.text,
-        address: addressController.text,
+        businessName: businessNameController.text.trim(),
+        personName: personNameController.text.trim(),
+        mobile: mobileController.text.trim(),
+        address: addressController.text.trim(),
         purpose: selectedPurpose ?? purposes.first,
         reVisited: reVisitRequired == true ? 'Yes' : 'No',
-        remark: remarksController.text,
+        remark: remarksController.text.trim(),
+        imageFile: _capturedImage,
         photoBase64: _imageToBase64(_capturedImage),
-        reVisitDate: calculatedRevisitDate,
+        reVisitDate: calculatedRevisitDate, visitDate: '',
       );
 
       setState(() {
@@ -511,48 +442,23 @@ class _NewVisitFormState extends State<NewVisitForm> {
       });
 
       if (result['success'] == true) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '✅ ${result['message'] ?? 'Visit submitted successfully!'}',
-            ),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 3),
-          ),
-        );
-
+        _showSnackBar(result['message'] ?? 'Visit submitted successfully!', AppColors.primaryGreen);
         _clearForm();
 
-        Future.delayed(Duration(seconds: 2), () {
-          Navigator.pop(context);
+        Future.delayed(const Duration(milliseconds: 1500), () {
+          if (mounted) Navigator.pop(context);
         });
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              '❌ ${result['message'] ?? 'Failed to submit visit.'}',
-            ),
-            backgroundColor: Colors.red,
-            duration: Duration(seconds: 3),
-          ),
-        );
+        _showSnackBar(result['message'] ?? 'Failed to submit visit.', AppColors.error);
       }
     } catch (e) {
       setState(() {
         isSubmitting = false;
       });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('❌ Error submitting form: $e'),
-          backgroundColor: Colors.red,
-          duration: Duration(seconds: 3),
-        ),
-      );
+      _showSnackBar('Error submitting form. Please try again.', AppColors.error);
     }
   }
 
-  // Clear form after submission
   void _clearForm() {
     businessNameController.clear();
     personNameController.clear();
@@ -565,7 +471,6 @@ class _NewVisitFormState extends State<NewVisitForm> {
       _selectedReVisitDate = null;
       _capturedImage = null;
       visitType = 'Doctor';
-      // Reset location to default
       selectedState = null;
       selectedDistrict = null;
       selectedBlock = null;
@@ -574,26 +479,47 @@ class _NewVisitFormState extends State<NewVisitForm> {
 
   @override
   Widget build(BuildContext context) {
+    final empName = widget.employeeData?.name ?? 'Employee';
+    final empId = widget.employeeData?.employeeId ?? widget.employeeData?.empId;
+
     return Scaffold(
+      backgroundColor: AppColors.creamBackground,
       appBar: AppBar(
         title: Text(
-          "New Visit - ${widget.employeeData?.name ?? 'Employee'}",
+          "New Visit Form",
           style: GoogleFonts.poppins(
-            fontSize: 16,
-            fontWeight: FontWeight.w600,
-            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: AppColors.white,
           ),
         ),
-        backgroundColor: Colors.green[700],
+        backgroundColor: AppColors.primaryGreen,
+        foregroundColor: AppColors.white,
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, color: AppColors.white, size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
         actions: [
-          if (widget.employeeData?.employeeId != null)
+          if (empId != null)
             Padding(
-              padding: EdgeInsets.only(right: 16),
+              padding: const EdgeInsets.only(right: 16),
               child: Center(
-                child: Text(
-                  'ID: ${widget.employeeData?.employeeId}',
-                  style: GoogleFonts.poppins(color: Colors.white, fontSize: 12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.white.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.primaryGold.withOpacity(0.4)),
+                  ),
+                  child: Text(
+                    'ID: $empId',
+                    style: GoogleFonts.poppins(
+                      color: AppColors.lightGold,
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -602,429 +528,138 @@ class _NewVisitFormState extends State<NewVisitForm> {
       body: Stack(
         children: [
           SingleChildScrollView(
-            padding: const EdgeInsets.all(16.0),
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 36),
             child: Column(
               children: [
-                // Employee Info Card
-                _buildEmployeeInfoCard(),
+                // 1. Employee Info Banner
+                _buildEmployeeInfoCard(empName, empId),
+                const SizedBox(height: 14),
 
+                // 2. Visit Category Type Section
                 _buildSection(
                   "Visit Information",
+                  Icons.category_rounded,
                   child: _buildVisitTypeSection(),
                 ),
 
-                // DYNAMIC LOCATION SECTION
+                // 3. Dynamic Location Section
                 _buildSection(
                   "Location Information",
-                  child: Column(
-                    children: [
-                      if (_isLoadingLocationData)
-                        Container(
-                          padding: EdgeInsets.all(16),
-                          child: Column(
-                            children: [
-                              CircularProgressIndicator(),
-                              SizedBox(height: 16),
-                              Text(
-                                'Loading location data...',
-                                style: GoogleFonts.poppins(),
-                              ),
-                            ],
-                          ),
-                        ),
-                      if (_locationError.isNotEmpty)
-                        Container(
-                          padding: EdgeInsets.all(16),
-                          decoration: BoxDecoration(
-                            color: Colors.red[50],
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.red[100]!),
-                          ),
-                          child: Column(
-                            children: [
-                              Text(
-                                '$_locationError',
-                                style: GoogleFonts.poppins(
-                                  color: Colors.red[700],
-                                ),
-                              ),
-                              SizedBox(height: 8),
-                              TextButton(
-                                onPressed: _loadLocationData,
-                                child: Text(
-                                  'Retry',
-                                  style: GoogleFonts.poppins(
-                                    color: Colors.red[700],
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      if (!_isLoadingLocationData &&
-                          _locationError.isEmpty &&
-                          _states.isNotEmpty)
-                        Column(
-                          children: [
-                            _buildLocationDropdown(
-                              "State",
-                              _states
-                                  .map((state) => state.name ?? '')
-                                  .where((name) => name.isNotEmpty)
-                                  .toList(),
-                              selectedState,
-                              _onStateChanged,
-                              Icons.location_city,
-                            ),
-                            SizedBox(height: 12),
-                            _buildLocationDropdown(
-                              "District",
-                              _districts
-                                  .map((district) => district.name ?? '')
-                                  .where((name) => name.isNotEmpty)
-                                  .toList(),
-                              selectedDistrict,
-                              _onDistrictChanged,
-                              Icons.map,
-                            ),
-                            SizedBox(height: 12),
-                            _buildLocationDropdown(
-                              "Block",
-                              _blocks
-                                  .map((block) => block.name ?? '')
-                                  .where((name) => name.isNotEmpty)
-                                  .toList(),
-                              selectedBlock,
-                              _onBlockChanged,
-                              Icons.location_on,
-                            ),
-                          ],
-                        ),
-                      if (!_isLoadingLocationData &&
-                          _locationError.isEmpty &&
-                          _states.isEmpty &&
-                          !_isLoadingLocationData)
-                        Container(
-                          padding: EdgeInsets.all(16),
-                          child: Column(
-                            children: [
-                              Icon(
-                                Icons.location_off,
-                                size: 48,
-                                color: Colors.grey[400],
-                              ),
-                              SizedBox(height: 16),
-                              Text(
-                                'No location data available',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w500,
-                                  color: Colors.grey[600],
-                                ),
-                              ),
-                              SizedBox(height: 8),
-                              Text(
-                                'Please contact your administrator to assign work areas.',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 14,
-                                  color: Colors.grey[500],
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
-                          ),
-                        ),
-                    ],
-                  ),
+                  Icons.map_rounded,
+                  child: _buildLocationSection(),
                 ),
 
+                // 4. Business & Customer Information Section
                 _buildSection(
                   "Business Information",
+                  Icons.storefront_rounded,
                   child: Column(
                     children: [
                       _buildTextField(
-                        "Business Name",
-                        Icons.business,
+                        "Business / Clinic Name",
+                        Icons.business_rounded,
                         businessNameController,
                       ),
                       _buildTextField(
-                        "Person Name",
-                        Icons.person,
+                        "Person / Doctor Name",
+                        Icons.person_rounded,
                         personNameController,
                       ),
                       _buildTextField(
-                        "Mobile No.",
-                        Icons.phone,
+                        "Mobile Number",
+                        Icons.phone_rounded,
                         mobileController,
                         keyboardType: TextInputType.phone,
                         maxLength: 10,
                       ),
                       _buildTextField(
                         "Address",
-                        Icons.location_on,
+                        Icons.location_on_rounded,
                         addressController,
                         maxLines: 2,
                       ),
+                      _buildTextField(
+                        "Password",
+                        Icons.lock_rounded,
+                        passwordController,
+                        keyboardType: TextInputType.visiblePassword,
+                      ),
                       _buildDropdown(
-                        "Select Purpose",
+                        "Select Visit Purpose",
                         purposes,
                         selectedPurpose,
-                            (value) => setState(() => selectedPurpose = value),
+                        (value) => setState(() => selectedPurpose = value),
+                        Icons.assignment_turned_in_rounded,
                       ),
                     ],
                   ),
                 ),
 
+                // 5. Visited Location Photo Section
                 _buildSection(
-                  "Capture of visited location",
-                  child: Column(
-                    children: [
-                      if (_capturedImage != null) ...[
-                        Container(
-                          width: 200,
-                          height: 200,
-                          margin: EdgeInsets.only(bottom: 16),
-                          decoration: BoxDecoration(
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.green, width: 2),
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
-                            child: Image.file(
-                              _capturedImage!,
-                              fit: BoxFit.cover,
-                              errorBuilder: (context, error, stackTrace) {
-                                return Container(
-                                  color: Colors.grey[200],
-                                  child: Icon(
-                                    Icons.error,
-                                    color: Colors.red,
-                                    size: 50,
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                        TextButton.icon(
-                          onPressed: _removeImage,
-                          icon: Icon(Icons.delete, color: Colors.red),
-                          label: Text(
-                            'Remove Image',
-                            style: GoogleFonts.poppins(color: Colors.red),
-                          ),
-                        ),
-                        SizedBox(height: 16),
-                      ],
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          OutlinedButton.icon(
-                            onPressed: _captureImage,
-                            icon: Icon(
-                              _capturedImage != null
-                                  ? Icons.camera_alt_outlined
-                                  : Icons.camera_alt,
-                              color: Colors.green,
-                            ),
-                            label: Text(
-                              _capturedImage != null
-                                  ? "Retake Image"
-                                  : "Capture Image",
-                              style: GoogleFonts.poppins(
-                                color: Colors.green[700],
-                              ),
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              side: BorderSide(color: Colors.green),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              padding: EdgeInsets.symmetric(
-                                vertical: 14,
-                                horizontal: 16,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                  "Capture Location Photo",
+                  Icons.camera_alt_rounded,
+                  child: _buildPhotoCaptureSection(),
                 ),
 
+                // 6. Re-visit Requirement Section
                 _buildSection(
-                  "Re-visited date (if required... )",
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Radio<bool>(
-                            value: true,
-                            groupValue: reVisitRequired,
-                            onChanged: (value) {
-                              setState(() {
-                                reVisitRequired = value;
-                                if (value == false) {
-                                  _selectedReVisitDate = null;
-                                }
-                              });
-                            },
-                          ),
-                          Text("Yes", style: GoogleFonts.poppins()),
-                          SizedBox(width: 16),
-                          Radio<bool>(
-                            value: false,
-                            groupValue: reVisitRequired,
-                            onChanged: (value) {
-                              setState(() {
-                                reVisitRequired = value;
-                                _selectedReVisitDate = null;
-                              });
-                            },
-                          ),
-                          Text("No", style: GoogleFonts.poppins()),
-                        ],
-                      ),
-                      if (reVisitRequired == true) ...[
-                        SizedBox(height: 16),
-                        Text(
-                          "Select Re-visit Date:",
-                          style: GoogleFonts.poppins(
-                            fontWeight: FontWeight.w500,
-                            fontSize: 14,
-                            color: Colors.grey[700],
-                          ),
-                        ),
-                        SizedBox(height: 8),
-                        Container(
-                          width: double.infinity,
-                          child: OutlinedButton.icon(
-                            onPressed: _selectReVisitDate,
-                            icon: Icon(
-                              Icons.calendar_today,
-                              color: Colors.green,
-                            ),
-                            label: Text(
-                              _selectedReVisitDate != null
-                                  ? _formatDate(_selectedReVisitDate!)
-                                  : "Select Date",
-                              style: GoogleFonts.poppins(
-                                color: _selectedReVisitDate != null
-                                    ? Colors.black
-                                    : Colors.grey,
-                              ),
-                            ),
-                            style: OutlinedButton.styleFrom(
-                              side: BorderSide(color: Colors.green),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              padding: EdgeInsets.symmetric(
-                                vertical: 14,
-                                horizontal: 16,
-                              ),
-                              alignment: Alignment.centerLeft,
-                            ),
-                          ),
-                        ),
-                        if (_selectedReVisitDate != null) ...[
-                          SizedBox(height: 8),
-                          Container(
-                            padding: EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: Colors.green[50],
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.green[100]!),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  "Selected Date: ${_formatDate(_selectedReVisitDate!)}",
-                                  style: GoogleFonts.poppins(
-                                    fontWeight: FontWeight.w500,
-                                    color: Colors.green[800],
-                                  ),
-                                ),
-                                IconButton(
-                                  onPressed: () {
-                                    setState(() {
-                                      _selectedReVisitDate = null;
-                                    });
-                                  },
-                                  icon: Icon(
-                                    Icons.close,
-                                    color: Colors.red,
-                                    size: 18,
-                                  ),
-                                  padding: EdgeInsets.zero,
-                                  constraints: BoxConstraints(),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                        if (_selectedReVisitDate == null) ...[
-                          SizedBox(height: 8),
-                          Text(
-                            "Please select a future date for re-visit",
-                            style: GoogleFonts.poppins(
-                              fontSize: 12,
-                              color: Colors.orange[700],
-                              fontStyle: FontStyle.italic,
-                            ),
-                          ),
-                        ],
-                      ],
-                    ],
-                  ),
+                  "Re-Visit Requirement",
+                  Icons.event_repeat_rounded,
+                  child: _buildRevisitSection(),
                 ),
 
+                // 7. Remarks Section
                 _buildSection(
-                  "Remarks",
+                  "Remarks & Notes",
+                  Icons.rate_review_rounded,
                   child: _buildTextField(
-                    "Enter remarks",
-                    Icons.note_alt,
+                    "Enter additional visit remarks or notes...",
+                    Icons.note_alt_rounded,
                     remarksController,
                     maxLines: 3,
                   ),
                 ),
 
-                SizedBox(height: 20),
+                const SizedBox(height: 12),
+
+                // 8. Submit Button
                 SizedBox(
                   width: double.infinity,
-                  child: ElevatedButton(
+                  height: 52,
+                  child: ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.green[700],
-                      padding: EdgeInsets.symmetric(vertical: 16),
+                      backgroundColor: AppColors.primaryGreen,
+                      foregroundColor: AppColors.white,
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(16),
                       ),
+                      elevation: 3,
                     ),
                     onPressed: isSubmitting ? null : _handleSubmit,
-                    child: isSubmitting
-                        ? SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          Colors.white,
-                        ),
-                      ),
-                    )
+                    icon: isSubmitting
+                        ? const SizedBox.shrink()
+                        : const Icon(Icons.send_rounded, color: AppColors.white, size: 20),
+                    label: isSubmitting
+                        ? const SizedBox(
+                            height: 22,
+                            width: 22,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2.5,
+                              valueColor: AlwaysStoppedAnimation<Color>(AppColors.white),
+                            ),
+                          )
                         : Text(
-                      "Submit Visit",
-                      style: GoogleFonts.poppins(
-                        fontSize: 16,
-                        color: Colors.white,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                            "Submit Visit",
+                            style: GoogleFonts.poppins(
+                              fontSize: 16,
+                              color: AppColors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                   ),
                 ),
-                SizedBox(height: 20),
               ],
             ),
           ),
@@ -1034,57 +669,97 @@ class _NewVisitFormState extends State<NewVisitForm> {
     );
   }
 
-  // ========== HELPER METHODS ==========
+  // ========== HELPER BUILDERS ==========
 
-  Widget _buildEmployeeInfoCard() {
+  Widget _buildEmployeeInfoCard(String empName, String? empId) {
     return Container(
-      margin: EdgeInsets.only(bottom: 16),
-      padding: EdgeInsets.all(16),
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.blue[50],
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.blue[100]!),
+        gradient: const LinearGradient(
+          colors: [
+            AppColors.darkGreen,
+            AppColors.primaryGreen,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: AppColors.primaryGold.withOpacity(0.4),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryGreen.withOpacity(0.25),
+            blurRadius: 12,
+            offset: const Offset(0, 5),
+          ),
+        ],
       ),
       child: Row(
         children: [
           Container(
-            width: 40,
-            height: 40,
+            height: 48,
+            width: 48,
             decoration: BoxDecoration(
-              color: Colors.blue[700],
               shape: BoxShape.circle,
+              gradient: const RadialGradient(
+                colors: [
+                  AppColors.lightGold,
+                  AppColors.primaryGold,
+                  AppColors.deepGold,
+                ],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
-            child: Icon(Icons.person, color: Colors.white, size: 20),
+            child: Container(
+              margin: const EdgeInsets.all(2),
+              decoration: const BoxDecoration(
+                shape: BoxShape.circle,
+                color: AppColors.white,
+              ),
+              child: const Icon(Icons.person_rounded, color: AppColors.primaryGreen, size: 26),
+            ),
           ),
-          SizedBox(width: 12),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${widget.employeeData?.name ?? "Unknown Employee"}',
+                  empName,
                   style: GoogleFonts.poppins(
-                    fontWeight: FontWeight.w600,
-                    color: Colors.blue[800],
-                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.white,
+                    fontSize: 15.5,
                   ),
                 ),
-                SizedBox(height: 4),
+                const SizedBox(height: 2),
                 Text(
-                  'ID: ${widget.employeeData?.employeeId ?? "N/A"} | ${widget.employeeData?.employeeType ?? "Employee"}',
+                  '${widget.employeeData?.employeeType ?? "Medical Representative"} • ID: ${empId ?? "N/A"}',
                   style: GoogleFonts.poppins(
-                    color: Colors.blue[600],
+                    color: AppColors.lightGold,
                     fontSize: 12,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
-                SizedBox(height: 2),
-                Text(
-                  'Mobile: ${widget.employeeData?.mobile ?? "N/A"}',
-                  style: GoogleFonts.poppins(
-                    color: Colors.blue[600],
-                    fontSize: 12,
+                if (widget.employeeData?.mobile != null) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    '📞 ${widget.employeeData!.mobile}',
+                    style: GoogleFonts.poppins(
+                      color: AppColors.white.withOpacity(0.85),
+                      fontSize: 11.5,
+                    ),
                   ),
-                ),
+                ],
               ],
             ),
           ),
@@ -1093,33 +768,49 @@ class _NewVisitFormState extends State<NewVisitForm> {
     );
   }
 
-  Widget _buildSection(String title, {required Widget child}) {
+  Widget _buildSection(String title, IconData icon, {required Widget child}) {
     return Container(
-      margin: EdgeInsets.only(bottom: 18),
-      padding: EdgeInsets.all(16),
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.lightGold.withOpacity(0.5)),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.shade200,
-            blurRadius: 6,
-            offset: Offset(0, 3),
+            color: AppColors.primaryGreen.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: GoogleFonts.poppins(
-              fontWeight: FontWeight.bold,
-              fontSize: 16,
-              color: Colors.green[700],
-            ),
+          Row(
+            children: [
+              Container(
+                height: 34,
+                width: 34,
+                decoration: BoxDecoration(
+                  color: AppColors.primaryGreen.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Icon(icon, size: 19, color: AppColors.primaryGreen),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                title,
+                style: GoogleFonts.poppins(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 14.5,
+                  color: AppColors.textDark,
+                ),
+              ),
+            ],
           ),
-          SizedBox(height: 12),
+          const SizedBox(height: 14),
           child,
         ],
       ),
@@ -1127,95 +818,492 @@ class _NewVisitFormState extends State<NewVisitForm> {
   }
 
   Widget _buildVisitTypeSection() {
+    final types = ['Doctor', 'Medical Hall', 'Other'];
     return Row(
-      children: ['Doctor', 'Medical Hall', 'Other'].map((type) {
+      children: types.map((type) {
+        final isSelected = visitType == type;
         return Expanded(
-          child: RadioListTile<String>(
-            contentPadding: EdgeInsets.zero,
-            value: type,
-            groupValue: visitType,
-            title: Text(type, style: GoogleFonts.poppins(fontSize: 14)),
-            onChanged: (value) => setState(() => visitType = value!),
+          child: GestureDetector(
+            onTap: () => setState(() => visitType = type),
+            child: Container(
+              margin: EdgeInsets.only(
+                right: type != types.last ? 8 : 0,
+              ),
+              padding: const EdgeInsets.symmetric(vertical: 11),
+              decoration: BoxDecoration(
+                color: isSelected ? AppColors.primaryGreen : AppColors.creamBackground,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isSelected ? AppColors.primaryGreen : AppColors.lightGold.withOpacity(0.7),
+                  width: 1.2,
+                ),
+              ),
+              child: Center(
+                child: Text(
+                  type,
+                  style: GoogleFonts.poppins(
+                    fontSize: 12.5,
+                    fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                    color: isSelected ? AppColors.white : AppColors.textDark,
+                  ),
+                ),
+              ),
+            ),
           ),
         );
       }).toList(),
     );
   }
 
-  // NEW METHOD FOR LOCATION DROPDOWNS
+  Widget _buildLocationSection() {
+    if (_isLoadingLocationData) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            const CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryGreen),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Loading dynamic location data...',
+              style: GoogleFonts.poppins(color: AppColors.textSecondary, fontSize: 13),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_locationError.isNotEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppColors.error.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.error.withOpacity(0.3)),
+        ),
+        child: Column(
+          children: [
+            Text(
+              _locationError,
+              style: GoogleFonts.poppins(
+                color: AppColors.error,
+                fontSize: 12.5,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            TextButton.icon(
+              onPressed: _loadLocationData,
+              icon: const Icon(Icons.refresh_rounded, size: 16, color: AppColors.error),
+              label: Text(
+                'Retry Loading',
+                style: GoogleFonts.poppins(
+                  color: AppColors.error,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (_states.isNotEmpty) {
+      return Column(
+        children: [
+          _buildLocationDropdown(
+            "State",
+            _states.map((s) => s.name ?? '').where((n) => n.isNotEmpty).toList(),
+            selectedState,
+            _onStateChanged,
+            Icons.public_rounded,
+          ),
+          const SizedBox(height: 12),
+          _buildLocationDropdown(
+            "District",
+            _districts.map((d) => d.name ?? '').where((n) => n.isNotEmpty).toList(),
+            selectedDistrict,
+            _onDistrictChanged,
+            Icons.location_city_rounded,
+          ),
+          const SizedBox(height: 12),
+          _buildLocationDropdown(
+            "Block",
+            _blocks.map((b) => b.name ?? '').where((n) => n.isNotEmpty).toList(),
+            selectedBlock,
+            _onBlockChanged,
+            Icons.domain_rounded,
+          ),
+        ],
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          const Icon(
+            Icons.location_off_rounded,
+            size: 42,
+            color: AppColors.textSecondary,
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'No assigned territory areas found',
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textDark,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Please verify your work profile assignment with administrator.',
+            style: GoogleFonts.poppins(
+              fontSize: 12,
+              color: AppColors.textSecondary,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPhotoCaptureSection() {
+    return Column(
+      children: [
+        if (_capturedImage != null) ...[
+          Container(
+            width: double.infinity,
+            height: 200,
+            margin: const EdgeInsets.only(bottom: 12),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.primaryGold, width: 1.5),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.file(
+                _capturedImage!,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                  color: AppColors.creamBackground,
+                  child: const Center(
+                    child: Icon(Icons.broken_image_rounded, color: AppColors.warning, size: 40),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              TextButton.icon(
+                onPressed: _removeImage,
+                icon: const Icon(Icons.delete_outline_rounded, color: AppColors.error, size: 18),
+                label: Text(
+                  'Remove Photo',
+                  style: GoogleFonts.poppins(color: AppColors.error, fontWeight: FontWeight.w600, fontSize: 13),
+                ),
+              ),
+              const SizedBox(width: 14),
+              TextButton.icon(
+                onPressed: _captureImage,
+                icon: const Icon(Icons.camera_alt_rounded, color: AppColors.primaryGreen, size: 18),
+                label: Text(
+                  'Retake Photo',
+                  style: GoogleFonts.poppins(color: AppColors.primaryGreen, fontWeight: FontWeight.w600, fontSize: 13),
+                ),
+              ),
+            ],
+          ),
+        ] else ...[
+          GestureDetector(
+            onTap: _captureImage,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 24),
+              decoration: BoxDecoration(
+                color: AppColors.creamBackground,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: AppColors.primaryGold.withOpacity(0.6),
+                  width: 1.2,
+                ),
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryGreen.withOpacity(0.1),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.camera_alt_rounded, size: 28, color: AppColors.primaryGreen),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    "Capture Visit Site Photo",
+                    style: GoogleFonts.poppins(
+                      color: AppColors.primaryGreen,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13.5,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    "Tap here to take real-time camera photo",
+                    style: GoogleFonts.poppins(
+                      color: AppColors.textSecondary,
+                      fontSize: 11.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildRevisitSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: GestureDetector(
+                onTap: () {
+                  setState(() {
+                    reVisitRequired = true;
+                  });
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color: reVisitRequired == true ? AppColors.primaryGreen : AppColors.creamBackground,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: reVisitRequired == true ? AppColors.primaryGreen : AppColors.lightGold.withOpacity(0.7),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        reVisitRequired == true ? Icons.check_circle_rounded : Icons.radio_button_off_rounded,
+                        size: 17,
+                        color: reVisitRequired == true ? AppColors.white : AppColors.textSecondary,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        "Re-visit Needed (Yes)",
+                        style: GoogleFonts.poppins(
+                          fontWeight: reVisitRequired == true ? FontWeight.w700 : FontWeight.w500,
+                          fontSize: 12,
+                          color: reVisitRequired == true ? AppColors.white : AppColors.textDark,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: GestureDetector(
+                onTap: () {
+                  setState(() {
+                    reVisitRequired = false;
+                    _selectedReVisitDate = null;
+                  });
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color: reVisitRequired == false ? AppColors.primaryGreen : AppColors.creamBackground,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: reVisitRequired == false ? AppColors.primaryGreen : AppColors.lightGold.withOpacity(0.7),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        reVisitRequired == false ? Icons.check_circle_rounded : Icons.radio_button_off_rounded,
+                        size: 17,
+                        color: reVisitRequired == false ? AppColors.white : AppColors.textSecondary,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        "No Re-visit",
+                        style: GoogleFonts.poppins(
+                          fontWeight: reVisitRequired == false ? FontWeight.w700 : FontWeight.w500,
+                          fontSize: 12,
+                          color: reVisitRequired == false ? AppColors.white : AppColors.textDark,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (reVisitRequired == true) ...[
+          const SizedBox(height: 14),
+          Text(
+            "Schedule Re-visit Date:",
+            style: GoogleFonts.poppins(
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+              color: AppColors.textDark,
+            ),
+          ),
+          const SizedBox(height: 8),
+          GestureDetector(
+            onTap: _selectReVisitDate,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+              decoration: BoxDecoration(
+                color: AppColors.creamBackground,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: _selectedReVisitDate != null ? AppColors.primaryGreen : AppColors.lightGold.withOpacity(0.8),
+                  width: 1.2,
+                ),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.calendar_month_rounded, color: AppColors.primaryGreen, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _selectedReVisitDate != null
+                          ? _formatDate(_selectedReVisitDate!)
+                          : "Select future date...",
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: _selectedReVisitDate != null ? FontWeight.w600 : FontWeight.w400,
+                        color: _selectedReVisitDate != null ? AppColors.textDark : AppColors.textSecondary,
+                      ),
+                    ),
+                  ),
+                  const Icon(Icons.arrow_drop_down_rounded, color: AppColors.primaryGreen),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
   Widget _buildLocationDropdown(
-      String label,
-      List<String> items,
-      String? selectedItem,
-      ValueChanged<String?> onChanged,
-      IconData icon,
-      ) {
+    String label,
+    List<String> items,
+    String? selectedItem,
+    ValueChanged<String?> onChanged,
+    IconData icon,
+  ) {
     return DropdownButtonFormField<String>(
       decoration: InputDecoration(
         labelText: label,
-        labelStyle: GoogleFonts.poppins(
-          color: Colors.black87,
-        ), // ✅ Label color black
-        prefixIcon: Icon(icon, color: Colors.green),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+        labelStyle: GoogleFonts.poppins(color: AppColors.textSecondary, fontSize: 13),
+        prefixIcon: Icon(icon, color: AppColors.primaryGreen, size: 20),
+        filled: true,
+        fillColor: AppColors.creamBackground,
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: AppColors.lightGold.withOpacity(0.6)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: AppColors.lightGold.withOpacity(0.6)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.primaryGreen, width: 1.5),
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       ),
       value: selectedItem,
       items: items
           .map(
             (item) => DropdownMenuItem<String>(
-          value: item,
-          child: Text(
-            item,
-            style: GoogleFonts.poppins(
-              color: Colors.black, // ✅ Dropdown item text black
+              value: item,
+              child: Text(
+                item,
+                style: GoogleFonts.poppins(color: AppColors.textDark, fontSize: 13),
+              ),
             ),
-          ),
-        ),
-      )
+          )
           .toList(),
       onChanged: items.isEmpty ? null : onChanged,
-      style: GoogleFonts.poppins(
-        color: Colors.black,
-      ), // ✅ Selected value text black
-      dropdownColor: Colors.white,
+      dropdownColor: AppColors.white,
     );
   }
 
   Widget _buildDropdown(
-      String hint,
-      List<String> items,
-      String? selectedItem,
-      ValueChanged<String?> onChanged,
-      ) {
-    return DropdownButtonFormField<String>(
-      decoration: InputDecoration(
-        labelText: hint,
-        labelStyle: GoogleFonts.poppins(),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-      ),
-      value: selectedItem,
-      items: items
-          .map(
-            (item) => DropdownMenuItem<String>(
-          value: item,
-          child: Text(item, style: GoogleFonts.poppins()),
+    String hint,
+    List<String> items,
+    String? selectedItem,
+    ValueChanged<String?> onChanged,
+    IconData icon,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12.0),
+      child: DropdownButtonFormField<String>(
+        decoration: InputDecoration(
+          labelText: hint,
+          labelStyle: GoogleFonts.poppins(color: AppColors.textSecondary, fontSize: 13),
+          prefixIcon: Icon(icon, color: AppColors.primaryGreen, size: 20),
+          filled: true,
+          fillColor: AppColors.creamBackground,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: AppColors.lightGold.withOpacity(0.6)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: AppColors.lightGold.withOpacity(0.6)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: AppColors.primaryGreen, width: 1.5),
+          ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
         ),
-      )
-          .toList(),
-      onChanged: onChanged,
+        value: selectedItem,
+        items: items
+            .map(
+              (item) => DropdownMenuItem<String>(
+                value: item,
+                child: Text(item, style: GoogleFonts.poppins(color: AppColors.textDark, fontSize: 13)),
+              ),
+            )
+            .toList(),
+        onChanged: onChanged,
+        dropdownColor: AppColors.white,
+      ),
     );
   }
 
   Widget _buildTextField(
-      String hint,
-      IconData icon,
-      TextEditingController controller, {
-        TextInputType keyboardType = TextInputType.text,
-        int maxLines = 1,
-        int? maxLength,
-      }) {
+    String hint,
+    IconData icon,
+    TextEditingController controller, {
+    TextInputType keyboardType = TextInputType.text,
+    int maxLines = 1,
+    int? maxLength,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12.0),
       child: TextField(
@@ -1225,38 +1313,68 @@ class _NewVisitFormState extends State<NewVisitForm> {
         keyboardType: keyboardType,
         decoration: InputDecoration(
           labelText: hint,
-          labelStyle: GoogleFonts.poppins(),
-          prefixIcon: Icon(icon, color: Colors.green),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+          labelStyle: GoogleFonts.poppins(color: AppColors.textSecondary, fontSize: 13),
+          prefixIcon: Icon(icon, color: AppColors.primaryGreen, size: 20),
+          filled: true,
+          fillColor: AppColors.creamBackground,
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: AppColors.lightGold.withOpacity(0.6)),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide(color: AppColors.lightGold.withOpacity(0.6)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(12),
+            borderSide: const BorderSide(color: AppColors.primaryGreen, width: 1.5),
+          ),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
           counterText: "",
         ),
-        style: GoogleFonts.poppins(),
+        style: GoogleFonts.poppins(color: AppColors.textDark, fontSize: 13.5),
       ),
     );
   }
 
   Widget _buildSubmissionOverlay() {
     return Container(
-      color: Colors.black.withOpacity(0.5),
+      color: Colors.black.withOpacity(0.6),
       child: Center(
         child: Container(
-          padding: EdgeInsets.all(20),
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 24),
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: AppColors.lightGold),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.2),
+                blurRadius: 16,
+              ),
+            ],
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              CircularProgressIndicator(
-                valueColor: AlwaysStoppedAnimation<Color>(Colors.green[700]!),
+              const CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryGreen),
               ),
-              SizedBox(height: 16),
+              const SizedBox(height: 18),
               Text(
-                'Submitting Visit...',
+                'Submitting Visit Record...',
                 style: GoogleFonts.poppins(
-                  fontWeight: FontWeight.w500,
-                  color: Colors.green[700],
+                  fontWeight: FontWeight.w700,
+                  fontSize: 15,
+                  color: AppColors.textDark,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Please wait while data is synced',
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
                 ),
               ),
             ],

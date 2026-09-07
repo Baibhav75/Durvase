@@ -2,16 +2,25 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../model/Retailer_model/retailer_login_model.dart';
+import '../session_manager.dart';
 
 class RetailerSessionManager {
   static const String _prefsKey = 'retailer_login_data';
   static const String _isLoggedInKey = 'retailer_is_logged_in';
-  static const String _retailerIdKey = 'retailer_id';
+  static const String _visiterIdKey = 'retailer_visiter_id';
+  static const String _legacyRetailerIdKey = 'retailer_id';
+  static const String _loginDataKey = 'retailer_login_data_id';
+  static const String _personNameKey = 'retailer_person_name';
+  static const String _businessNameKey = 'retailer_business_name';
   static const String _nameKey = 'retailer_name';
   static const String _emailKey = 'retailer_email';
   static const String _mobileKey = 'retailer_mobile';
   static const String _addressKey = 'retailer_address';
+  static const String _photoKey = 'retailer_photo';
   static const String _profileKey = 'retailer_profile';
+  static const String _empTypeKey = 'retailer_emp_type';
+  static const String _visitForKey = 'retailer_visit_for';
+  static const String _purposeKey = 'retailer_purpose';
 
   static const String _savedMobileKey = 'saved_retailer_mobile';
   static const String _savedPasswordKey = 'saved_retailer_password';
@@ -30,8 +39,22 @@ class RetailerSessionManager {
       final bool savedData = await prefs.setString(_prefsKey, jsonString);
       final bool savedFlag = await prefs.setBool(_isLoggedInKey, true);
 
-      if (retailer.retailerId.isNotEmpty) {
-        await prefs.setString(_retailerIdKey, retailer.retailerId);
+      final String vId = retailer.visiterId.isNotEmpty ? retailer.visiterId : retailer.retailerId;
+
+      if (vId.isNotEmpty) {
+        await prefs.setString(_visiterIdKey, vId);
+        await prefs.setString(_legacyRetailerIdKey, vId);
+        // Sync with central SessionManager
+        await SessionManager.saveRetailerId(vId);
+      }
+      if (retailer.loginData.isNotEmpty) {
+        await prefs.setString(_loginDataKey, retailer.loginData);
+      }
+      if (retailer.personName.isNotEmpty) {
+        await prefs.setString(_personNameKey, retailer.personName);
+      }
+      if (retailer.businessName.isNotEmpty) {
+        await prefs.setString(_businessNameKey, retailer.businessName);
       }
       if (retailer.name.isNotEmpty) {
         await prefs.setString(_nameKey, retailer.name);
@@ -42,15 +65,25 @@ class RetailerSessionManager {
       if (retailer.phone.isNotEmpty) {
         await prefs.setString(_mobileKey, retailer.phone);
       }
-      if (retailer.businessAddress.isNotEmpty) {
-        await prefs.setString(_addressKey, retailer.businessAddress);
+      if (retailer.address.isNotEmpty) {
+        await prefs.setString(_addressKey, retailer.address);
       }
-      if (retailer.profile.isNotEmpty) {
-        await prefs.setString(_profileKey, retailer.profile);
+      if (retailer.photo.isNotEmpty) {
+        await prefs.setString(_photoKey, retailer.photo);
+        await prefs.setString(_profileKey, retailer.photo);
+      }
+      if (retailer.empType.isNotEmpty) {
+        await prefs.setString(_empTypeKey, retailer.empType);
+      }
+      if (retailer.visitFor.isNotEmpty) {
+        await prefs.setString(_visitForKey, retailer.visitFor);
+      }
+      if (retailer.purpose.isNotEmpty) {
+        await prefs.setString(_purposeKey, retailer.purpose);
       }
 
       debugPrint(
-        '✅ Retailer session saved - Data: $savedData, Flag: $savedFlag, RetailerID: ${retailer.retailerId}',
+        '✅ Retailer session saved - Data: $savedData, Flag: $savedFlag, VisiterID: $vId',
       );
       return savedData && savedFlag;
     } catch (e, stackTrace) {
@@ -115,16 +148,22 @@ class RetailerSessionManager {
       }
 
       // Fallback: recover from individual keys
-      final storedRetailerId = prefs.getString(_retailerIdKey);
-      if (isLoggedInFlag && storedRetailerId != null && storedRetailerId.isNotEmpty) {
+      final storedVisiterId = prefs.getString(_visiterIdKey) ?? prefs.getString(_legacyRetailerIdKey);
+      if (isLoggedInFlag && storedVisiterId != null && storedVisiterId.isNotEmpty) {
         debugPrint('Recovering retailer session from individual stored preferences...');
         final recoveredModel = RetailerModel(
-          retailerId: storedRetailerId,
+          visiterId: storedVisiterId,
+          loginData: prefs.getString(_loginDataKey) ?? '',
+          personName: prefs.getString(_personNameKey) ?? '',
+          businessName: prefs.getString(_businessNameKey) ?? '',
           name: prefs.getString(_nameKey) ?? '',
           email: prefs.getString(_emailKey) ?? '',
           phone: prefs.getString(_mobileKey) ?? '',
-          businessAddress: prefs.getString(_addressKey) ?? '',
-          profile: prefs.getString(_profileKey) ?? '',
+          address: prefs.getString(_addressKey) ?? '',
+          photo: prefs.getString(_photoKey) ?? prefs.getString(_profileKey) ?? '',
+          empType: prefs.getString(_empTypeKey) ?? '',
+          visitFor: prefs.getString(_visitForKey) ?? '',
+          purpose: prefs.getString(_purposeKey) ?? 'Retailer',
         );
 
         await saveLoginData(recoveredModel);
@@ -146,9 +185,10 @@ class RetailerSessionManager {
       if (!isLoggedInFlag) return false;
 
       final hasJson = (prefs.getString(_prefsKey)?.isNotEmpty ?? false);
-      final hasRetailerId = (prefs.getString(_retailerIdKey)?.isNotEmpty ?? false);
+      final hasVisiterId = (prefs.getString(_visiterIdKey)?.isNotEmpty ?? false) ||
+          (prefs.getString(_legacyRetailerIdKey)?.isNotEmpty ?? false);
 
-      return hasJson || hasRetailerId;
+      return hasJson || hasVisiterId;
     } catch (e, stackTrace) {
       debugPrint('Error checking retailer login status: $e');
       debugPrint('Stack trace: $stackTrace');
@@ -157,7 +197,7 @@ class RetailerSessionManager {
   }
 
   static bool _hasValidUserData(RetailerModel model) {
-    return model.retailerId.isNotEmpty || model.phone.isNotEmpty || model.name.isNotEmpty;
+    return model.visiterId.isNotEmpty || model.phone.isNotEmpty || model.name.isNotEmpty || model.personName.isNotEmpty;
   }
 
   static Future<void> logout() async {
@@ -165,14 +205,25 @@ class RetailerSessionManager {
       final prefs = await SharedPreferences.getInstance();
 
       await prefs.remove(_prefsKey);
-      await prefs.remove(_retailerIdKey);
+      await prefs.remove(_visiterIdKey);
+      await prefs.remove(_legacyRetailerIdKey);
+      await prefs.remove(_loginDataKey);
+      await prefs.remove(_personNameKey);
+      await prefs.remove(_businessNameKey);
       await prefs.remove(_nameKey);
       await prefs.remove(_emailKey);
       await prefs.remove(_mobileKey);
       await prefs.remove(_addressKey);
+      await prefs.remove(_photoKey);
       await prefs.remove(_profileKey);
+      await prefs.remove(_empTypeKey);
+      await prefs.remove(_visitForKey);
+      await prefs.remove(_purposeKey);
 
       await prefs.setBool(_isLoggedInKey, false);
+
+      // Also clear central SessionManager retailer ID
+      await SessionManager.clearRetailerId();
 
       debugPrint('================================');
       debugPrint('✅ RETAILER LOGOUT COMPLETE: Session cleared');
@@ -184,18 +235,66 @@ class RetailerSessionManager {
   }
 
   // --- Convenience Getters ---
-  static Future<String?> getRetailerId() async {
+  static Future<String?> getVisiterId() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_retailerIdKey);
+    return prefs.getString(_visiterIdKey) ?? prefs.getString(_legacyRetailerIdKey);
+  }
+
+  static Future<String?> getRetailerId() async {
+    return getVisiterId();
+  }
+
+  static Future<String?> getPersonName() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_personNameKey) ?? prefs.getString(_nameKey);
+  }
+
+  static Future<String?> getBusinessName() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_businessNameKey);
   }
 
   static Future<String?> getName() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_nameKey);
+    return prefs.getString(_nameKey) ?? prefs.getString(_personNameKey) ?? prefs.getString(_businessNameKey);
   }
 
   static Future<String?> getMobile() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_mobileKey);
   }
-}
+
+  static Future<String?> getPhone() async {
+    return getMobile();
+  }
+
+  static Future<String?> getAddress() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_addressKey);
+  }
+
+  static Future<String?> getPhoto() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_photoKey) ?? prefs.getString(_profileKey);
+  }
+
+  static Future<String?> getPurpose() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_purposeKey);
+  }
+
+  static Future<String?> getEmpType() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_empTypeKey);
+  }
+
+  static Future<String?> getVisitFor() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_visitForKey);
+  }
+
+  static Future<String?> getLoginDataId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_loginDataKey);
+  }
+}

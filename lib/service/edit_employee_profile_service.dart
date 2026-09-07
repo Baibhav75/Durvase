@@ -8,7 +8,7 @@ import 'api_serviceProfile.dart';
 import 'session_manager.dart';
 
 class EditEmployeeProfileService {
-  static const String baseUrl = 'https://durvasaayurved.online/api';
+  static const String baseUrl = 'https://durvasaayurved.com/api';
 
   /// Update / Edit Employee (MR) Profile via multipart form-data
   static Future<EditEmployeeProfileResponse> editEmployeeProfile({
