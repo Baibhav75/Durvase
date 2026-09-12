@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/cupertino.dart';
 import 'package:http/http.dart' as http;
 
+import '../model/Retailer_model/discount_model.dart';
 import '../model/amr_assine_field_model.dart';
 import '../model/my_order_modelplace.dart';
 import '/model/asm_work_report_model.dart';
@@ -11,7 +12,9 @@ import '../model/Retailer_model/retailer_profile_model.dart';
 import '../model/Retailer_model/edit_retailer_model.dart';
 import '../model/Retailer_model/asm_list_model.dart';
 import '../model/Retailer_model/retailer_team_model.dart';
+import '../model/Dealer_Model/visitor_dealer_list_model.dart';
 import '../model/user_address_model.dart';
+import '../model/Retailer_model/retailer_order_history_model.dart';
 
 class ApiService {
   // Get ASM List
@@ -367,6 +370,7 @@ class ApiService {
     required String userId,
     required String shippingAddress,
     required String paymentMode,
+    String? paymentType,
   }) async {
     try {
       final url = Uri.parse(ApiConstants.placeOrder);
@@ -374,12 +378,11 @@ class ApiService {
       final body = {
         "ProductID": productId,
         "RetailerId": retailerId ?? "",
-        "DealerId": dealerId ?? "",
-        if (asmId != null && asmId.isNotEmpty) "AsmId": asmId,
-        if (asmId != null && asmId.isNotEmpty) "ASMId": asmId,
+        "DealerID": dealerId ?? "",
         "UserId": userId,
-        "ShippingAddress": shippingAddress,
-        "PaymenMode": paymentMode,
+        "PaymentType": paymentType ?? paymentMode,
+        "ASMId": asmId ?? "",
+        if (shippingAddress.trim().isNotEmpty) "ShippingAddress": shippingAddress,
       };
 
       debugPrint("========================================");
@@ -578,6 +581,180 @@ class ApiService {
     } catch (e) {
       debugPrint("❌ Error loading retailers: $e");
       throw Exception('Error loading retailers: $e');
+    }
+  }
+
+  // Get Visitor Dealers List (https://durvasaayurved.com/api/VisitorDealersList)
+  static Future<VisitorDealerListResponse> getVisitorDealersList() async {
+    try {
+      final uri = Uri.parse(ApiConstants.visitorDealersList);
+      debugPrint("======================================");
+      debugPrint("📦 GET VISITOR DEALERS LIST API");
+      debugPrint("URL: $uri");
+      debugPrint("======================================");
+
+      final response = await http.get(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      );
+
+      debugPrint("📥 Visitor Dealers Status: ${response.statusCode}");
+      debugPrint("📥 Visitor Dealers Response: ${response.body}");
+
+      if (response.statusCode == 200) {
+        String rawBody = response.body;
+        // Fix trailing empty key-values
+        String sanitized = rawBody.replaceAll(RegExp(r':\s*,'), ': null,');
+        sanitized = sanitized.replaceAllMapped(
+          RegExp(r':\s*(\r?\n|\r|\})'),
+          (match) => ': null${match.group(1)}',
+        );
+
+        final decoded = jsonDecode(sanitized);
+        VisitorDealerListResponse result;
+        if (decoded is Map<String, dynamic>) {
+          result = VisitorDealerListResponse.fromJson(decoded);
+        } else if (decoded is List) {
+          result = VisitorDealerListResponse(
+            header: VisitorDealerHeader(success: true, totalCount: decoded.length),
+            data: decoded
+                .whereType<Map<String, dynamic>>()
+                .map((e) => VisitorDealerItem.fromJson(e))
+                .toList(),
+          );
+        } else {
+          result = VisitorDealerListResponse();
+        }
+
+        // Print parsed dealer info including Block
+        for (int i = 0; i < result.data.length; i++) {
+          final item = result.data[i];
+          debugPrint("---------------------------------------------");
+          debugPrint("🏢 Dealer [${i + 1}] ID: ${item.displayId} (${item.displayName})");
+          debugPrint('   "Country": "${item.country}"');
+          debugPrint('   "State": "${item.state}"');
+          debugPrint('   "District": "${item.district}"');
+          debugPrint('   "Block": "${item.block}"');
+          debugPrint('   "Address": "${item.address}"');
+          debugPrint("---------------------------------------------");
+        }
+
+        return result;
+      }
+      throw Exception('Failed to load dealer list (Status: ${response.statusCode})');
+    } catch (e) {
+      debugPrint("❌ Error loading dealer list: $e");
+      throw Exception('Error loading dealer list: $e');
+    }
+  }
+
+  // Get Discount By Retailer / Visiter (Dealer Discount / Margin Offer)
+  // Real URL: https://durvasaayurved.com/api/GetDiscountByVisiter?VisiterId=VTR807825
+  static Future<RetailerDiscountModel?> getDiscountByRetailer(
+      String retailerId) async {
+    return getDiscountByVisiter(retailerId);
+  }
+
+  // Get Discount By Visiter
+  static Future<RetailerDiscountModel?> getDiscountByVisiter(
+      String visiterId) async {
+    try {
+      final cleanId = visiterId.trim();
+      if (cleanId.isEmpty) return null;
+
+      final url = Uri.parse(
+        '${ApiConstants.getDiscountByVisiter}'
+        '?VisiterId=${Uri.encodeComponent(cleanId)}',
+      );
+
+      debugPrint('📤 [Discount API] GET URL: $url');
+
+      final response = await http.get(
+        url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      ).timeout(const Duration(seconds: 15));
+
+      debugPrint('📥 [Discount API] StatusCode: ${response.statusCode}');
+      debugPrint('📥 [Discount API] Response: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final decoded = jsonDecode(response.body);
+
+        if (decoded is Map<String, dynamic>) {
+          if (decoded['data'] != null && decoded['data'] is Map<String, dynamic>) {
+            return RetailerDiscountModel.fromJson(decoded['data'] as Map<String, dynamic>);
+          } else if (decoded['data'] != null && decoded['data'] is List && (decoded['data'] as List).isNotEmpty) {
+            return RetailerDiscountModel.fromJson((decoded['data'] as List).first as Map<String, dynamic>);
+          }
+          return RetailerDiscountModel.fromJson(decoded);
+        } else if (decoded is List && decoded.isNotEmpty) {
+          return RetailerDiscountModel.fromJson(decoded.first as Map<String, dynamic>);
+        }
+      }
+
+      return null;
+    } catch (e) {
+      debugPrint('❌ [Discount API] Error: $e');
+      return null;
+    }
+  }
+
+  // Get Retailer Order History
+  // URL: https://durvasaayurved.com/api/GetOrderHistory?idType=RetailerId&idValue=VTR807825
+  static Future<List<RetailerOrderItemModel>> getRetailerOrderHistory({
+    String idType = 'RetailerId',
+    required String idValue,
+  }) async {
+    try {
+      final cleanId = idValue.trim();
+      if (cleanId.isEmpty) return [];
+
+      final uri = Uri.parse(ApiConstants.getOrderHistory).replace(
+        queryParameters: {
+          'idType': idType,
+          'idValue': cleanId,
+        },
+      );
+
+      debugPrint("======================================");
+      debugPrint("📦 RETAILER ORDER HISTORY API");
+      debugPrint("URL: $uri");
+      debugPrint("======================================");
+
+      final response = await http.get(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+      ).timeout(const Duration(seconds: 15));
+
+      debugPrint("📥 [OrderHistory] Status: ${response.statusCode}");
+      debugPrint("📥 [OrderHistory] Body: ${response.body}");
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        final decoded = jsonDecode(response.body);
+
+        if (decoded is Map<String, dynamic>) {
+          final historyResponse = RetailerOrderHistoryResponse.fromJson(decoded);
+          return historyResponse.data;
+        } else if (decoded is List) {
+          return decoded
+              .whereType<Map<String, dynamic>>()
+              .map((e) => RetailerOrderItemModel.fromJson(e))
+              .toList();
+        }
+      }
+      return [];
+    } catch (e) {
+      debugPrint("❌ [OrderHistory] API Error: $e");
+      rethrow;
     }
   }
 }

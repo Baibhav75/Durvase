@@ -56,8 +56,10 @@ class _CartScreenState extends State<CartScreen> {
         if (!mounted) return;
 
         if (result['status'] == true && result['data'] is List) {
+          final List rawList = result['data'];
+          final List<Map<String, dynamic>> mergedList = _mergeCartItems(rawList);
           setState(() {
-            apiCartItems = result['data'];
+            apiCartItems = mergedList;
             errorMessage = "";
           });
         } else {
@@ -86,6 +88,267 @@ class _CartScreenState extends State<CartScreen> {
         });
       }
     }
+  }
+
+  List<Map<String, dynamic>> _mergeCartItems(List<dynamic> rawList) {
+    final Map<String, Map<String, dynamic>> map = {};
+    for (var raw in rawList) {
+      if (raw is! Map) continue;
+      final item = Map<String, dynamic>.from(raw);
+      final String pid = (item["ProductID"] ??
+              item["ProductId"] ??
+              item["product_id"] ??
+              item["Product_Id"] ??
+              item["ProId"] ??
+              item["proId"] ??
+              item["UniqueID"] ??
+              item["UniqueId"] ??
+              item["ProductName"] ??
+              item["id"] ??
+              "")
+          .toString()
+          .trim();
+
+      if (pid.isEmpty) continue;
+
+      final dynamic rowId = item["Id"] ??
+          item["ID"] ??
+          item["id"] ??
+          item["CartId"] ??
+          item["CartID"] ??
+          item["cart_id"] ??
+          item["CartItemId"] ??
+          item["cartItemId"];
+
+      final int currentQty = _parseQty(item["QTY"] ?? item["Qty"] ?? item["Quantity"] ?? 1);
+
+      if (map.containsKey(pid)) {
+        final existing = map[pid]!;
+        final int oldQty = _parseQty(existing["QTY"] ?? existing["Qty"] ?? 1);
+        final int combinedQty = oldQty + currentQty;
+        existing["QTY"] = combinedQty;
+        existing["Qty"] = combinedQty;
+        existing["Quantity"] = combinedQty;
+
+        if (rowId != null) {
+          final List ids = (existing["cartRowIds"] as List?) ?? [];
+          if (!ids.contains(rowId)) {
+            ids.add(rowId);
+          }
+          existing["cartRowIds"] = ids;
+        }
+      } else {
+        item["QTY"] = currentQty;
+        item["Qty"] = currentQty;
+        item["Quantity"] = currentQty;
+        if (rowId != null) {
+          item["cartRowIds"] = [rowId];
+        }
+        map[pid] = item;
+      }
+    }
+    return map.values.toList();
+  }
+
+  void _incrementQty(int index) {
+    if (index < 0 || index >= apiCartItems.length) return;
+    setState(() {
+      final item = apiCartItems[index];
+      final currentQty = _parseQty(item["QTY"] ?? item["Qty"] ?? 1);
+      final newQty = currentQty + 1;
+      item["QTY"] = newQty;
+      item["Qty"] = newQty;
+      item["Quantity"] = newQty;
+    });
+
+    final String pid = (apiCartItems[index]["ProductID"] ?? apiCartItems[index]["ProductId"] ?? "").toString();
+    if (pid.isNotEmpty && _effectiveUserId.isNotEmpty) {
+      _authService.addToCart(userId: _effectiveUserId, productId: pid, qty: 1);
+    }
+  }
+
+  void _decrementQty(int index) {
+    if (index < 0 || index >= apiCartItems.length) return;
+    final item = apiCartItems[index];
+    final currentQty = _parseQty(item["QTY"] ?? item["Qty"] ?? 1);
+    if (currentQty > 1) {
+      setState(() {
+        final newQty = currentQty - 1;
+        item["QTY"] = newQty;
+        item["Qty"] = newQty;
+        item["Quantity"] = newQty;
+      });
+    } else {
+      _confirmRemoveItem(index);
+    }
+  }
+
+  void _confirmRemoveItem(int index) {
+    if (index < 0 || index >= apiCartItems.length) return;
+
+    final itemToRemove = apiCartItems[index];
+
+    final productName =
+        itemToRemove["ProductName"]?.toString() ?? "this item";
+
+    // Get actual Cart ID from API response
+    final cartId = itemToRemove["ID"];
+
+    debugPrint("🛒 Product: $productName");
+    debugPrint("🆔 Cart ID: $cartId");
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+
+        title: Row(
+          children: [
+            const Icon(
+              Icons.delete_outline,
+              color: AppColors.error,
+              size: 24,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              "Remove Item",
+              style: GoogleFonts.poppins(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+          ],
+        ),
+
+        content: Text(
+          "Are you sure you want to remove \"$productName\" from your cart?",
+          style: GoogleFonts.poppins(
+            fontSize: 13,
+            color: AppColors.textDark,
+          ),
+        ),
+
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(
+              "Cancel",
+              style: GoogleFonts.poppins(
+                color: Colors.grey.shade700,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+
+            onPressed: () async {
+              // Close confirmation dialog
+              Navigator.pop(ctx);
+
+              // Validate Cart ID
+              if (cartId == null ||
+                  cartId.toString().trim().isEmpty) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        "Cart ID not found. Unable to remove item.",
+                      ),
+                    ),
+                  );
+                }
+                return;
+              }
+
+              final cleanCartId = cartId.toString().trim();
+
+              debugPrint("========================================");
+              debugPrint("🗑️ REMOVING CART ITEM");
+              debugPrint("Product: $productName");
+              debugPrint("Cart ID: $cleanCartId");
+              debugPrint("========================================");
+
+              // Remove from UI immediately
+              setState(() {
+                apiCartItems.removeAt(index);
+              });
+
+              // Call backend DeleteCart API
+              final result =
+              await _authService.deleteCartItem(cleanCartId);
+
+              debugPrint(
+                "📥 Delete API Result: $result",
+              );
+
+              // Check API result
+              if (result['status'] == true) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        "\"$productName\" removed from cart.",
+                        style: GoogleFonts.poppins(
+                          color: Colors.white,
+                          fontSize: 12.5,
+                        ),
+                      ),
+                      backgroundColor: AppColors.primaryGreen,
+                      behavior: SnackBarBehavior.floating,
+                      duration: const Duration(seconds: 2),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  );
+                }
+              } else {
+                // API failed → refresh cart from backend
+                await _fetchCartData();
+
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        result['message'] ??
+                            "Failed to remove item.",
+                        style: GoogleFonts.poppins(
+                          color: Colors.white,
+                          fontSize: 12.5,
+                        ),
+                      ),
+                      backgroundColor: AppColors.error,
+                      behavior: SnackBarBehavior.floating,
+                      duration: const Duration(seconds: 2),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  );
+                }
+              }
+            },
+
+            child: Text(
+              "Remove",
+              style: GoogleFonts.poppins(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   double _parsePrice(dynamic val) {
@@ -202,7 +465,7 @@ class _CartScreenState extends State<CartScreen> {
                               separatorBuilder: (_, __) => const SizedBox(height: 12),
                               itemBuilder: (context, index) {
                                 final item = apiCartItems[index];
-                                return _buildCartItemCard(item);
+                                return _buildCartItemCard(item, index);
                               },
                             ),
 
@@ -225,7 +488,7 @@ class _CartScreenState extends State<CartScreen> {
     );
   }
 
-  Widget _buildCartItemCard(dynamic item) {
+  Widget _buildCartItemCard(dynamic item, int index) {
     final String productName = (item["ProductName"] ?? 'Product').toString();
     final double sellingPrice = _parsePrice(item["SellingPrice"] ?? item["Price"] ?? 0);
     final double listedPrice = _parsePrice(item["ListedPrice"] ?? item["MRP"] ?? 0);
@@ -293,16 +556,37 @@ class _CartScreenState extends State<CartScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  productName,
-                  style: GoogleFonts.poppins(
-                    fontSize: 14.5,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textDark,
-                    height: 1.3,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        productName,
+                        style: GoogleFonts.poppins(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textDark,
+                          height: 1.3,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    // Direct Trash Delete Button
+                    InkWell(
+                      onTap: () => _confirmRemoveItem(index),
+                      borderRadius: BorderRadius.circular(6),
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        child: Icon(
+                          Icons.delete_outline_rounded,
+                          size: 20,
+                          color: Colors.grey.shade500,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 8),
 
@@ -351,33 +635,54 @@ class _CartScreenState extends State<CartScreen> {
 
                 const SizedBox(height: 10),
 
-                // Quantity badge & Subtotal
+                // Quantity Increment/Decrement Selector & Subtotal
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
+                    // Quantity Control (+ / -)
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
                         color: AppColors.creamBackground,
-                        borderRadius: BorderRadius.circular(6),
+                        borderRadius: BorderRadius.circular(8),
                         border: Border.all(color: AppColors.primaryGold.withOpacity(0.5)),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(
-                            "Quantity: ",
-                            style: GoogleFonts.poppins(
-                              fontSize: 12,
-                              color: AppColors.textSecondary,
+                          InkWell(
+                            onTap: () => _decrementQty(index),
+                            borderRadius: const BorderRadius.horizontal(left: Radius.circular(8)),
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              child: Icon(
+                                qty == 1 ? Icons.delete_outline : Icons.remove,
+                                size: 16,
+                                color: qty == 1 ? AppColors.error : AppColors.primaryGreen,
+                              ),
                             ),
                           ),
-                          Text(
-                            "$qty",
-                            style: GoogleFonts.poppins(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.primaryGreen,
+                          Container(
+                            constraints: const BoxConstraints(minWidth: 26),
+                            alignment: Alignment.center,
+                            child: Text(
+                              "$qty",
+                              style: GoogleFonts.poppins(
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.primaryGreen,
+                              ),
+                            ),
+                          ),
+                          InkWell(
+                            onTap: () => _incrementQty(index),
+                            borderRadius: const BorderRadius.horizontal(right: Radius.circular(8)),
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              child: Icon(
+                                Icons.add,
+                                size: 16,
+                                color: AppColors.primaryGreen,
+                              ),
                             ),
                           ),
                         ],

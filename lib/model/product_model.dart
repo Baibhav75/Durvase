@@ -166,3 +166,33 @@ class ProductDetailsData {
     );
   }
 }
+
+class AddToCartResponse {
+  final bool status;
+  final String message;
+
+  AddToCartResponse({
+    required this.status,
+    required this.message,
+  });
+
+  factory AddToCartResponse.fromJson(Map<String, dynamic> json) {
+    final rawStatus = json['status'] ?? json['Status'] ?? json['success'] ?? json['Success'];
+    final bool parsedStatus = rawStatus == true ||
+        rawStatus.toString().toLowerCase() == 'true' ||
+        rawStatus == 1 ||
+        rawStatus.toString() == '1';
+
+    return AddToCartResponse(
+      status: parsedStatus,
+      message: json['message']?.toString() ??
+          json['Message']?.toString() ??
+          (parsedStatus ? 'Product added to cart successfully.' : 'Failed to add to cart'),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'status': status,
+    'message': message,
+  };
+}

@@ -64,6 +64,11 @@ class ApiConstants {
   // Proceed to Checkout / Place Order
   static String get placeOrder =>
       "$baseUrl/api/ProceedToCheckout/PlaceOrder";
+
+  // Delete Cart Item
+  static String deleteCart(dynamic id) =>
+      "$baseUrl/api/DeleteCart/DeleteCart?ID=$id";
+
   // My Orders - Dealer
   static String get getMyOrders =>
       "$baseUrl/api/GetByRetailerIdDealerProduct/GetDetails";
@@ -79,7 +84,29 @@ class ApiConstants {
   // Get Address Retailer / Dealer by Visiter ID
   static String get getByAddressRetailerDealer =>
       "$baseUrl/api/GetByAddressRetailerDealer";
-}
 
+  // Visitor Dealers List
+  static String get visitorDealersList =>
+      "$baseUrl/api/VisitorDealersList";
+
+  // Product Offer Discount (Apply Retailer Discount)
+  static String get productOfferDiscount =>
+      "$baseUrl/api/VisiterOfferDiscount";
+  //https://durvasaayurved.com/api/VisiterOfferDiscount
+
+  // Get Discount By Visiter / Retailer (https://durvasaayurved.com/api/GetDiscountByVisiter?VisiterId=VTR807825)
+  static String get getDiscountByVisiter =>
+      "$baseUrl/api/GetDiscountByVisiter";
+  static String get getDiscountByRetailer =>
+      "$baseUrl/api/GetDiscountByVisiter";
+
+  // Add To Cart (https://durvasaayurved.com/api/AddToCart?ProductID=Product_ID1878&UserID=EMP855297)
+  static String get addToCart =>
+      "$baseUrl/api/AddToCart";
+
+  // Retailer / User Order History (https://durvasaayurved.com/api/GetOrderHistory?idType=RetailerId&idValue=VTR807825)
+  static String get getOrderHistory =>
+      "$baseUrl/api/GetOrderHistory";
+}
 
 

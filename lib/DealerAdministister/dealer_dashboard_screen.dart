@@ -1,7 +1,9 @@
+import 'package:ayarwadeapps/model/Retailer_model/retailer_login_model.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../OrderPage/orderPagefist.dart';
 import '../OrderPage/utils/theme_constants.dart';
+import '../RetailerAdministister/retailer_team_screen.dart';
 import '../model/Dealer_Model/dealer_login_model.dart';
 import '../service/Dealer_service/dealer_login_service.dart';
 import 'dealer_drawer.dart';
@@ -12,6 +14,7 @@ import 'dealer_products_page.dart';
 import 'dealer_track_order_page.dart';
 import 'dealer_support_page.dart';
 import 'dealer_profile_screen.dart';
+import 'discount_apply_screen.dart';
 
 class DealerDashboardPage extends StatefulWidget {
   const DealerDashboardPage({super.key});
@@ -24,6 +27,8 @@ class _DealerDashboardPageState extends State<DealerDashboardPage> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>(); // 👈 add
 
   DealerModel? _dealer;
+
+  RetailerModel get currentDealer => currentDealer;
 
   @override
   void initState() {
@@ -211,6 +216,27 @@ class _DealerDashboardPageState extends State<DealerDashboardPage> {
                             );
                           },
                         ),
+                        // _AnimatedDashboardCard(
+                        //   icon: Icons.groups_rounded,
+                        //   title: 'Our Team',
+                        //   subtitle: 'Retailers, MRs & ASMs',
+                          //onTap: () => _navigateTo(RetailerTeamScreen(retailer: currentRetailer)),
+
+                        _featureCard(
+                          Icons.groups_rounded,
+                          'Our Team',
+                              () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => RetailerTeamScreen(
+                                      employeeId: currentDealer.visiterId ?? '',
+                                      employeeType: 'Dealer',
+                                    ),
+                                  ),
+                                );
+                          },
+                        ),
 
                         _featureCard(
                           Icons.description_outlined,
@@ -246,6 +272,19 @@ class _DealerDashboardPageState extends State<DealerDashboardPage> {
                               context,
                               MaterialPageRoute(
                                 builder: (context) => DealerTrackOrderPage(dealerId: dealerId),
+                              ),
+                            );
+                          },
+                        ),
+
+                        _featureCard(
+                          Icons.discount_outlined,
+                          'Retailer Discounts',
+                          () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => DiscountApplyScreen(dealerId: dealerId),
                               ),
                             );
                           },

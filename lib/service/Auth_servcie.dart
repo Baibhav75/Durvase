@@ -194,40 +194,80 @@ class AuthService {
     try {
       String resolvedUserId = userId.trim();
       if (resolvedUserId.isEmpty) {
+        resolvedUserId = await SessionManager.getEffectiveUserId();
+      }
+      if (resolvedUserId.isEmpty) {
+        resolvedUserId = (await SessionManager.getVisiterId()) ?? '';
+      }
+      if (resolvedUserId.isEmpty) {
+        resolvedUserId = (await SessionManager.getRetailerId()) ?? '';
+      }
+      if (resolvedUserId.isEmpty) {
         resolvedUserId = (await SessionManager.getUserId()) ?? '';
+      }
+      if (resolvedUserId.isEmpty) {
+        resolvedUserId = (await SessionManager.getEmpId()) ?? '';
       }
 
       if (resolvedUserId.isEmpty) {
         return {
           'status': false,
-          'message': 'User ID not found. Please log in again.',
+          'message': 'User session not found. Please log in to add items to cart.',
         };
       }
 
+      // Real URL: https://durvasaayurved.com/api/AddToCart?ProductID=Product_ID1878&UserID=EMP855297
+      final cleanProductId = productId.trim();
       final url = Uri.parse(
-        "$baseUrl/AddToCart/AddToCart?ProductID=$productId&UserID=$resolvedUserId&Qty=$qty",
+        "$baseUrl/AddToCart?ProductID=${Uri.encodeComponent(cleanProductId)}&UserID=${Uri.encodeComponent(resolvedUserId)}",
       );
 
-      final response = await http.post(url);
+      debugPrint("========================================");
+      debugPrint("📤 [AddToCart API] POST URL: $url");
+      debugPrint("========================================");
 
-      if (response.statusCode == 200) {
-        final jsonData = jsonDecode(response.body);
-        final bool isSuccess = jsonData['status'] == true;
-        final String msg = jsonData['message'] ??
-            (isSuccess ? 'Added to cart successfully' : 'Failed to add to cart');
+      final response = await http.post(
+        url,
+        headers: {
+          'Accept': 'application/json',
+        },
+      ).timeout(const Duration(seconds: 15));
+
+      debugPrint("📥 [AddToCart API] StatusCode: ${response.statusCode}");
+      debugPrint("📥 [AddToCart API] ResponseBody: ${response.body}");
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        final dynamic jsonData = jsonDecode(response.body);
+        if (jsonData is Map<String, dynamic>) {
+          final res = AddToCartResponse.fromJson(jsonData);
+          return {
+            'status': res.status,
+            'message': res.message,
+            'data': jsonData['data'] ?? jsonData['Data'],
+          };
+        }
+
         return {
-          'status': isSuccess,
-          'message': msg,
-          'data': jsonData['data'],
+          'status': true,
+          'message': 'Product added to cart successfully.',
         };
       } else {
+        String errMsg = 'Failed to add to cart (${response.statusCode})';
+        try {
+          final dynamic jsonData = jsonDecode(response.body);
+          if (jsonData is Map<String, dynamic>) {
+            final res = AddToCartResponse.fromJson(jsonData);
+            errMsg = res.message;
+          }
+        } catch (_) {}
+
         return {
           'status': false,
-          'message': 'Server error (${response.statusCode})',
+          'message': errMsg,
         };
       }
     } catch (e) {
-      debugPrint("AddToCart Error: $e");
+      debugPrint("❌ [AddToCart API] Error: $e");
       return {
         'status': false,
         'message': 'Connection error: $e',
@@ -235,11 +275,19 @@ class AuthService {
     }
   }
 
+  // getCard service
   Future<Map<String, dynamic>> getCart(String userId) async {
     try {
       String resolvedUserId = userId.trim();
+
       if (resolvedUserId.isEmpty) {
-        resolvedUserId = (await SessionManager.getUserId()) ?? '';
+        resolvedUserId = await SessionManager.getEffectiveUserId();
+      }
+      if (resolvedUserId.isEmpty) {
+        resolvedUserId = (await SessionManager.getVisiterId()) ?? '';
+      }
+      if (resolvedUserId.isEmpty) {
+        resolvedUserId = (await SessionManager.getRetailerId()) ?? '';
       }
 
       if (resolvedUserId.isEmpty) {
@@ -250,37 +298,135 @@ class AuthService {
         };
       }
 
-      final url = Uri.parse("$baseUrl/GetCart/Cart?UserId=$resolvedUserId");
-      final response = await http.get(url);
+      final url = Uri.parse(
+        "$baseUrl/GetCart/Cart?UserId=${Uri.encodeComponent(resolvedUserId)}",
+      );
+
+      debugPrint("📤 [GetCart API] URL: $url");
+
+      final response = await http.get(
+        url,
+        headers: {
+          'Accept': 'application/json',
+        },
+      ).timeout(const Duration(seconds: 15));
+
+      debugPrint("📥 [GetCart API] StatusCode: ${response.statusCode}");
+      debugPrint("GetCart Response: ${response.body}");
 
       if (response.statusCode == 200) {
-        final jsonData = jsonDecode(response.body);
+        final Map<String, dynamic> jsonData =
+        jsonDecode(response.body);
+
         if (jsonData['status'] == true && jsonData['data'] != null) {
+          final List<dynamic> cartData =
+          jsonData['data'] is List ? jsonData['data'] : [];
+
+          // Read Cart ID from every item
+          for (final item in cartData) {
+            debugPrint("Cart ID: ${item['ID']}");
+            debugPrint("Product ID: ${item['ProductID']}");
+            debugPrint("Product Name: ${item['ProductName']}");
+          }
+
           return {
             'status': true,
             'message': jsonData['message'] ?? '',
-            'data': jsonData['data'] is List ? jsonData['data'] : [],
-          };
-        } else {
-          return {
-            'status': false,
-            'message': jsonData['message'] ?? 'Your cart is empty',
-            'data': [],
+            'CartCount': jsonData['CartCount'] ?? 0,
+            'data': cartData,
           };
         }
-      } else {
+
         return {
           'status': false,
-          'message': 'Server error (${response.statusCode})',
+          'message': jsonData['message'] ?? 'Your cart is empty',
           'data': [],
         };
       }
+
+      return {
+        'status': false,
+        'message': 'Server error (${response.statusCode})',
+        'data': [],
+      };
     } catch (e) {
       debugPrint("GetCart Error: $e");
+
       return {
         'status': false,
         'message': 'Connection error: $e',
         'data': [],
+      };
+    }
+  }
+
+  Future<Map<String, dynamic>> deleteCartItem(dynamic cartId) async {
+    try {
+      if (cartId == null || cartId.toString().trim().isEmpty) {
+        return {
+          'status': false,
+          'message': 'Invalid Cart ID',
+        };
+      }
+
+      final cleanId = cartId.toString().trim();
+
+      final url = Uri.parse(
+        '$baseUrl/DeleteCart?ID=$cleanId',
+      );
+
+      debugPrint('========================================');
+      debugPrint('🗑️ DELETE CART API CALL');
+      debugPrint('Method: GET');
+      debugPrint('URL: $url');
+      debugPrint('Cart ID: $cleanId');
+      debugPrint('========================================');
+
+      final response = await http.get(
+        url,
+        headers: {
+          'Accept': 'application/json',
+        },
+      );
+
+      debugPrint('📥 Status Code: ${response.statusCode}');
+      debugPrint('📥 Response: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        if (response.body.trim().isEmpty) {
+          return {
+            'status': true,
+            'message': 'Item deleted successfully',
+          };
+        }
+
+        final jsonData = jsonDecode(response.body);
+
+        final bool success =
+            jsonData['status'] == true ||
+                jsonData['Status'] == true ||
+                jsonData['success'] == true;
+
+        return {
+          'status': success,
+          'message': jsonData['message'] ??
+              jsonData['Message'] ??
+              (success
+                  ? 'Item deleted successfully'
+                  : 'Failed to delete item'),
+        };
+      }
+
+      return {
+        'status': false,
+        'message': 'Server error (${response.statusCode})',
+      };
+    } catch (e) {
+      debugPrint('❌ DeleteCart Exception: $e');
+
+      return {
+        'status': false,
+        'message': 'Connection error: $e',
       };
     }
   }

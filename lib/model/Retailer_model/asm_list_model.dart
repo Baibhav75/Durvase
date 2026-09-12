@@ -1,3 +1,4 @@
+
 class AsmListResponse {
   final AsmHeader? header;
   final List<AsmItem> data;
@@ -9,14 +10,20 @@ class AsmListResponse {
 
   factory AsmListResponse.fromJson(Map<String, dynamic> json) {
     return AsmListResponse(
-      header: json['Header'] != null && json['Header'] is Map<String, dynamic>
-          ? AsmHeader.fromJson(json['Header'] as Map<String, dynamic>)
+      header: json['Header'] is Map
+          ? AsmHeader.fromJson(
+        Map<String, dynamic>.from(json['Header']),
+      )
           : null,
-      data: json['data'] != null && json['data'] is List
+      data: json['data'] is List
           ? (json['data'] as List)
-              .whereType<Map<String, dynamic>>()
-              .map((i) => AsmItem.fromJson(i))
-              .toList()
+          .whereType<Map>()
+          .map(
+            (item) => AsmItem.fromJson(
+          Map<String, dynamic>.from(item),
+        ),
+      )
+          .toList()
           : [],
     );
   }
@@ -24,10 +31,15 @@ class AsmListResponse {
   Map<String, dynamic> toJson() {
     return {
       'Header': header?.toJson(),
-      'data': data.map((x) => x.toJson()).toList(),
+      'data': data.map((item) => item.toJson()).toList(),
     };
   }
 }
+
+
+// =====================================================
+// ASM HEADER
+// =====================================================
 
 class AsmHeader {
   final bool success;
@@ -84,36 +96,114 @@ class AsmHeader {
 
   static String? _parseString(dynamic value) {
     if (value == null) return null;
-    final str = value.toString().trim();
-    return str.isEmpty ? null : str;
+
+    final String valueString = value.toString().trim();
+
+    if (valueString.isEmpty) return null;
+
+    return valueString;
   }
 
   factory AsmHeader.fromJson(Map<String, dynamic> json) {
     return AsmHeader(
-      success: json['success'] == true || json['success']?.toString() == 'true',
-      totalCount: int.tryParse(json['totalCount']?.toString() ?? '') ?? 0,
-      mrId: _parseString(json['MRId'] ?? json['mrId'] ?? json['mrid']),
-      name: _parseString(json['Name'] ?? json['name']),
-      mobile: _parseString(json['Mobile'] ?? json['mobile']),
-      mobileAlt: _parseString(json['MobileAlt'] ?? json['mobileAlt'] ?? json['mobile_alt']),
-      email: _parseString(json['Email'] ?? json['email']),
-      district: _parseString(json['District'] ?? json['district']),
-      block: _parseString(json['Block'] ?? json['block']),
-      fatherName: _parseString(json['FatherName'] ?? json['fatherName']),
-      address: _parseString(json['Address'] ?? json['address']),
-      joinDate: _parseString(json['JoinDate'] ?? json['joinDate']),
-      image: _parseString(json['Image'] ?? json['image']),
-      empId: _parseString(json['EmpId'] ?? json['empId'] ?? json['emp_id']),
-      status: _parseString(json['Status'] ?? json['status']),
-      createdAt: _parseString(json['CreatedAt'] ?? json['createdAt']),
-      gender: _parseString(json['Gender'] ?? json['gender']),
-      postOffice: _parseString(json['PostOffice'] ?? json['postOffice']),
-      country: _parseString(json['Country'] ?? json['country']),
-      state: _parseString(json['State'] ?? json['state']),
-      employeeCode: _parseString(json['EmployeeCode'] ?? json['employeeCode']),
-      employeeType: _parseString(json['EmployeeType'] ?? json['employeeType']),
-      emergenceNo: _parseString(json['EmergenceNo'] ?? json['emergenceNo']),
-      billedGroup: _parseString(json['BilledGroup'] ?? json['billedGroup']),
+      success: json['success'] == true ||
+          json['success']?.toString().toLowerCase() == 'true',
+
+      totalCount:
+      int.tryParse(json['totalCount']?.toString() ?? '') ?? 0,
+
+      mrId: _parseString(
+        json['MRId'] ?? json['mrId'] ?? json['mrid'],
+      ),
+
+      name: _parseString(
+        json['Name'] ?? json['name'],
+      ),
+
+      mobile: _parseString(
+        json['Mobile'] ?? json['mobile'],
+      ),
+
+      mobileAlt: _parseString(
+        json['MobileAlt'] ??
+            json['mobileAlt'] ??
+            json['mobile_alt'],
+      ),
+
+      email: _parseString(
+        json['Email'] ?? json['email'],
+      ),
+
+      district: _parseString(
+        json['District'] ?? json['district'],
+      ),
+
+      block: _parseString(
+        json['Block'] ?? json['block'],
+      ),
+
+      fatherName: _parseString(
+        json['FatherName'] ?? json['fatherName'],
+      ),
+
+      address: _parseString(
+        json['Address'] ?? json['address'],
+      ),
+
+      joinDate: _parseString(
+        json['JoinDate'] ?? json['joinDate'],
+      ),
+
+      image: _parseString(
+        json['Image'] ?? json['image'] ?? json['Photo'],
+      ),
+
+      empId: _parseString(
+        json['EmpId'] ??
+            json['empId'] ??
+            json['EmployeeId'] ??
+            json['employeeId'],
+      ),
+
+      status: _parseString(
+        json['Status'] ?? json['status'],
+      ),
+
+      createdAt: _parseString(
+        json['CreatedAt'] ?? json['createdAt'],
+      ),
+
+      gender: _parseString(
+        json['Gender'] ?? json['gender'],
+      ),
+
+      postOffice: _parseString(
+        json['PostOffice'] ?? json['postOffice'],
+      ),
+
+      country: _parseString(
+        json['Country'] ?? json['country'],
+      ),
+
+      state: _parseString(
+        json['State'] ?? json['state'],
+      ),
+
+      employeeCode: _parseString(
+        json['EmployeeCode'] ?? json['employeeCode'],
+      ),
+
+      employeeType: _parseString(
+        json['EmployeeType'] ?? json['employeeType'],
+      ),
+
+      emergenceNo: _parseString(
+        json['EmergenceNo'] ?? json['emergenceNo'],
+      ),
+
+      billedGroup: _parseString(
+        json['BilledGroup'] ?? json['billedGroup'],
+      ),
     );
   }
 
@@ -146,6 +236,11 @@ class AsmHeader {
     };
   }
 }
+
+
+// =====================================================
+// ASM ITEM
+// =====================================================
 
 class AsmItem {
   final String? empId;
@@ -198,42 +293,165 @@ class AsmItem {
 
   static String? _parseString(dynamic value) {
     if (value == null) return null;
-    final str = value.toString().trim();
-    return str.isEmpty ? null : str;
+
+    final String valueString = value.toString().trim();
+
+    if (valueString.isEmpty) return null;
+
+    return valueString;
   }
 
   factory AsmItem.fromJson(Map<String, dynamic> json) {
     return AsmItem(
+
+      // -------------------------
+      // ID
+      // -------------------------
+
       empId: _parseString(
         json['EmpId'] ??
             json['empId'] ??
-            json['emp_id'] ??
             json['EmployeeId'] ??
             json['employeeId'] ??
             json['Id'] ??
             json['id'],
       ),
-      mrId: _parseString(json['MRId'] ?? json['mrId'] ?? json['mrid']),
-      name: _parseString(json['Name'] ?? json['name'] ?? json['emp_name'] ?? json['employee_name']),
-      mobile: _parseString(json['Mobile'] ?? json['mobile'] ?? json['phone'] ?? json['Phone']),
-      mobileAlt: _parseString(json['MobileAlt'] ?? json['mobileAlt'] ?? json['mobile_alt']),
-      email: _parseString(json['Email'] ?? json['email']),
-      district: _parseString(json['District'] ?? json['district']),
-      block: _parseString(json['Block'] ?? json['block']),
-      fatherName: _parseString(json['FatherName'] ?? json['fatherName']),
-      address: _parseString(json['Address'] ?? json['address']),
-      joinDate: _parseString(json['JoinDate'] ?? json['joinDate']),
-      image: _parseString(json['Image'] ?? json['image'] ?? json['photo'] ?? json['Photo']),
-      status: _parseString(json['Status'] ?? json['status']),
-      createdAt: _parseString(json['CreatedAt'] ?? json['createdAt']),
-      gender: _parseString(json['Gender'] ?? json['gender']),
-      postOffice: _parseString(json['PostOffice'] ?? json['postOffice']),
-      country: _parseString(json['Country'] ?? json['country']),
-      state: _parseString(json['State'] ?? json['state']),
-      employeeCode: _parseString(json['EmployeeCode'] ?? json['employeeCode'] ?? json['EmployeeId']),
-      employeeType: _parseString(json['EmployeeType'] ?? json['employeeType'] ?? 'ASM'),
-      emergenceNo: _parseString(json['EmergenceNo'] ?? json['emergenceNo']),
-      billedGroup: _parseString(json['BilledGroup'] ?? json['billedGroup']),
+
+      mrId: _parseString(
+        json['MRId'] ??
+            json['mrId'] ??
+            json['mrid'],
+      ),
+
+      // -------------------------
+      // BASIC DETAILS
+      // -------------------------
+
+      name: _parseString(
+        json['Name'] ??
+            json['name'] ??
+            json['Emp_Name'] ??
+            json['emp_name'] ??
+            json['employee_name'],
+      ),
+
+      mobile: _parseString(
+        json['Mobile'] ??
+            json['mobile'] ??
+            json['Phone'] ??
+            json['phone'],
+      ),
+
+      mobileAlt: _parseString(
+        json['MobileAlt'] ??
+            json['mobileAlt'] ??
+            json['mobile_alt'],
+      ),
+
+      email: _parseString(
+        json['Email'] ??
+            json['email'],
+      ),
+
+      // -------------------------
+      // LOCATION
+      // -------------------------
+
+      country: _parseString(
+        json['Country'] ??
+            json['country'],
+      ),
+
+      state: _parseString(
+        json['State'] ??
+            json['state'],
+      ),
+
+      district: _parseString(
+        json['District'] ??
+            json['district'],
+      ),
+
+      block: _parseString(
+        json['Block'] ??
+            json['block'],
+      ),
+
+      postOffice: _parseString(
+        json['PostOffice'] ??
+            json['postOffice'],
+      ),
+
+      address: _parseString(
+        json['Address'] ??
+            json['address'],
+      ),
+
+      // -------------------------
+      // PERSONAL DETAILS
+      // -------------------------
+
+      fatherName: _parseString(
+        json['FatherName'] ??
+            json['fatherName'],
+      ),
+
+      gender: _parseString(
+        json['Gender'] ??
+            json['gender'],
+      ),
+
+      // -------------------------
+      // EMPLOYEE DETAILS
+      // -------------------------
+
+      employeeCode: _parseString(
+        json['EmployeeCode'] ??
+            json['employeeCode'] ??
+            json['EmployeeId'],
+      ),
+
+      employeeType: _parseString(
+        json['EmployeeType'] ??
+            json['employeeType'] ??
+            'ASM',
+      ),
+
+      status: _parseString(
+        json['Status'] ??
+            json['status'],
+      ),
+
+      joinDate: _parseString(
+        json['JoinDate'] ??
+            json['joinDate'],
+      ),
+
+      // -------------------------
+      // OTHER DETAILS
+      // -------------------------
+
+      image: _parseString(
+        json['Image'] ??
+            json['image'] ??
+            json['Photo'] ??
+            json['photo'],
+      ),
+
+      createdAt: _parseString(
+        json['CreatedAt'] ??
+            json['createdAt'],
+      ),
+
+      emergenceNo: _parseString(
+        json['EmergenceNo'] ??
+            json['emergenceNo'],
+      ),
+
+      billedGroup: _parseString(
+        json['BilledGroup'] ??
+            json['billedGroup'],
+      ),
     );
   }
 
@@ -264,44 +482,139 @@ class AsmItem {
     };
   }
 
-  bool get isActive {
-    if (status == null) return true;
-    final s = status!.toLowerCase();
-    return s == 'active' || s == '1' || s == 'true';
+  // ===================================================
+  // HELPER GETTERS
+  // ===================================================
+
+  String get displayName {
+    if (name != null && name!.trim().isNotEmpty) {
+      return name!;
+    }
+
+    return 'ASM';
   }
 
-  String get displayName => (name != null && name!.isNotEmpty) ? name! : 'ASM Executive ($displayId)';
-
-  String get displayId => empId ?? employeeCode ?? mrId ?? 'N/A';
-
-  String get fullAddress {
-    final parts = [address, block, district, state, country]
-        .where((e) => e != null && e.trim().isNotEmpty)
-        .toList();
-    if (parts.isNotEmpty) return parts.join(', ');
-    return '';
+  String get displayId {
+    return empId ??
+        employeeCode ??
+        mrId ??
+        'N/A';
   }
 
-  String get countryAndState {
-    final parts = [
-      if (state != null && state!.trim().isNotEmpty) "State: $state",
-      if (country != null && country!.trim().isNotEmpty) "Country: $country",
-    ];
-    return parts.join(' | ');
+  String get displayMobile {
+    return mobile ?? 'N/A';
   }
+
+  String get displayState {
+    return state ?? 'N/A';
+  }
+
+  String get displayDistrict {
+    return district ?? 'N/A';
+  }
+
+  String get displayBlock {
+    return block ?? 'N/A';
+  }
+
+  String get displayAddress {
+    return address ?? 'N/A';
+  }
+
+  // ===================================================
+  // FULL LOCATION
+  // ===================================================
 
   String get displayLocation {
-    final parts = [district, state, country].where((e) => e != null && e.trim().isNotEmpty).toList();
-    if (parts.isNotEmpty) return parts.join(', ');
-    if (block != null && block!.isNotEmpty) return block!;
-    return 'Assigned Region';
+    final List<String> parts = [];
+
+    if (block != null && block!.trim().isNotEmpty) {
+      parts.add(block!);
+    }
+
+    if (district != null && district!.trim().isNotEmpty) {
+      parts.add(district!);
+    }
+
+    if (state != null && state!.trim().isNotEmpty) {
+      parts.add(state!);
+    }
+
+    if (country != null && country!.trim().isNotEmpty) {
+      parts.add(country!);
+    }
+
+    if (parts.isEmpty) {
+      return 'Location not available';
+    }
+
+    return parts.join(', ');
   }
 
+  // ===================================================
+  // FULL ADDRESS
+  // ===================================================
+
+  String get fullAddress {
+    final List<String> parts = [];
+
+    if (address != null && address!.trim().isNotEmpty) {
+      parts.add(address!);
+    }
+
+    if (block != null && block!.trim().isNotEmpty) {
+      parts.add(block!);
+    }
+
+    if (district != null && district!.trim().isNotEmpty) {
+      parts.add(district!);
+    }
+
+    if (state != null && state!.trim().isNotEmpty) {
+      parts.add(state!);
+    }
+
+    if (country != null && country!.trim().isNotEmpty) {
+      parts.add(country!);
+    }
+
+    if (parts.isEmpty) {
+      return 'Address not available';
+    }
+
+    return parts.join(', ');
+  }
+
+  // ===================================================
+  // ACTIVE STATUS
+  // ===================================================
+
+  bool get isActive {
+    if (status == null || status!.trim().isEmpty) {
+      return true;
+    }
+
+    final String value = status!.toLowerCase().trim();
+
+    return value == 'active' ||
+        value == '1' ||
+        value == 'true';
+  }
+
+  // ===================================================
+  // IMAGE URL
+  // ===================================================
+
   String get resolvedImageUrl {
-    if (image == null || image!.isEmpty) return '';
-    if (image!.startsWith('http://') || image!.startsWith('https://')) {
+    if (image == null || image!.trim().isEmpty) {
+      return '';
+    }
+
+    if (image!.startsWith('http://') ||
+        image!.startsWith('https://')) {
       return image!;
     }
+
     return 'https://durvasaayurved.com/$image';
   }
 }

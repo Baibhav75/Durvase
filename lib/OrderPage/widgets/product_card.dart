@@ -2,10 +2,11 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:http/http.dart' as http;
 import 'package:shimmer/shimmer.dart';
 import '../../constants/app_colors.dart';
 import '../../model/latest_product_model.dart';
+import '../../service/Auth_servcie.dart';
+import '../../service/session_manager.dart';
 
 class ProductCard extends StatefulWidget {
   final LatestProduct product;
@@ -28,63 +29,94 @@ class ProductCard extends StatefulWidget {
 class _ProductCardState extends State<ProductCard> {
   bool _isAdding = false;
   bool _isAdded = false;
+  final AuthService _authService = AuthService();
 
   Future<void> _handleAddToCart() async {
-    if (_isAdding || widget.userId.isEmpty) return;
+    if (_isAdding) return;
 
     setState(() => _isAdding = true);
 
     try {
-      final url = Uri.parse(
-        'https://durvasaayurved.com/api/AddToCart/AddToCart?ProductID=${widget.product.productId}&UserID=${widget.userId}&Qty=1',
+      String resolvedId = widget.userId.trim();
+      if (resolvedId.isEmpty) {
+        resolvedId = await SessionManager.getEffectiveUserId();
+      }
+
+      final result = await _authService.addToCart(
+        userId: resolvedId,
+        productId: widget.product.productId,
+        qty: 1,
       );
 
-      final response = await http.post(url);
+      if (!mounted) return;
 
-      if (response.statusCode == 200) {
-        final jsonResponse = jsonDecode(response.body);
-        if (jsonResponse['status'] == true) {
-          if (mounted) {
-            setState(() {
-              _isAdding = false;
-              _isAdded = true;
-            });
-            widget.onAddedToCart?.call();
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Row(
-                  children: [
-                    const Icon(Icons.check_circle, color: AppColors.white, size: 18),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        '${widget.product.productName} added to cart',
-                        style: GoogleFonts.poppins(color: AppColors.white, fontSize: 12.5),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
+      if (result['status'] == true) {
+        setState(() {
+          _isAdding = false;
+          _isAdded = true;
+        });
+        widget.onAddedToCart?.call();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: AppColors.white, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    result['message'] ?? '${widget.product.productName} added to cart',
+                    style: GoogleFonts.poppins(color: AppColors.white, fontSize: 12.5),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
                 ),
-                backgroundColor: AppColors.primaryGreen,
-                behavior: SnackBarBehavior.floating,
-                duration: const Duration(seconds: 2),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              ),
-            );
+              ],
+            ),
+            backgroundColor: AppColors.primaryGreen,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 2),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
 
-            // Reset back to + ADD after 2.5 seconds
-            Future.delayed(const Duration(seconds: 2), () {
-              if (mounted) {
-                setState(() => _isAdded = false);
-              }
-            });
+        // Reset back to + ADD after 2.5 seconds
+        Future.delayed(const Duration(seconds: 2), () {
+          if (mounted) {
+            setState(() => _isAdded = false);
           }
-          return;
-        }
+        });
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline, color: AppColors.white, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    result['message'] ?? 'Failed to add product to cart',
+                    style: GoogleFonts.poppins(color: AppColors.white, fontSize: 12.5),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 3),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
       }
-    } catch (_) {
-      // Ignored
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error adding to cart: $e', style: GoogleFonts.poppins(color: Colors.white, fontSize: 12)),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
     } finally {
       if (mounted) {
         setState(() => _isAdding = false);

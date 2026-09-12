@@ -331,16 +331,47 @@ class SessionManager {
   // --- Convenience Getters ---
   static Future<String?> getUserId() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_userIdKey) ??
+    final id = prefs.getString(_userIdKey) ??
         prefs.getString(_legacyUserIdKey) ??
+        prefs.getString(_retailerIdKey) ??
         prefs.getString(_empIdKey);
+    if (id != null && id.trim().isNotEmpty) {
+      return id.trim();
+    }
+    return null;
+  }
+
+  /// Get the most effective user ID across all user types (Employee, Retailer, Visitor, Dealer)
+  static Future<String> getEffectiveUserId() async {
+    final prefs = await SharedPreferences.getInstance();
+    final directId = prefs.getString(_userIdKey) ??
+        prefs.getString(_legacyUserIdKey) ??
+        prefs.getString(_retailerIdKey) ??
+        prefs.getString(_empIdKey);
+    if (directId != null && directId.trim().isNotEmpty) {
+      return directId.trim();
+    }
+
+    // Check login data JSON if available
+    try {
+      final loginData = await getLoginData();
+      if (loginData != null) {
+        final empId = loginData.empId ?? loginData.asmId;
+        if (empId != null && empId.trim().isNotEmpty) {
+          return empId.trim();
+        }
+      }
+    } catch (_) {}
+
+    return '';
   }
 
   static Future<String?> getEmpId() async {
     final prefs = await SharedPreferences.getInstance();
     return prefs.getString(_empIdKey) ??
         prefs.getString(_userIdKey) ??
-        prefs.getString(_legacyUserIdKey);
+        prefs.getString(_legacyUserIdKey) ??
+        prefs.getString(_retailerIdKey);
   }
 
   static Future<String?> getName() async {

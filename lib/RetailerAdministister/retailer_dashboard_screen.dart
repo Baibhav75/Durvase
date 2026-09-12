@@ -3,8 +3,10 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:lottie/lottie.dart';
 import '../service/Retailer_service/retailer_profile_service.dart';
 import '../model/Retailer_model/retailer_profile_model.dart';
-import '../DealerAdministister/my_orders_page.dart';
+import '../model/Retailer_model/discount_model.dart';
+import '../service/api_service.dart';
 import '../OrderPage/orderPagefist.dart';
+import 'retailer_order_history_page.dart';
 import '../constants/app_colors.dart';
 import '../model/Retailer_model/retailer_login_model.dart';
 import '../service/Retailer_service/retailer_login_service.dart';
@@ -12,7 +14,6 @@ import '../widgets/gemini_widget.dart';
 import 'retailer_drawer.dart';
 import 'retailer_id_card_screen.dart';
 import 'retailer_invoices_page.dart';
-import 'retailer_orders_page.dart';
 import 'retailer_payments_page.dart';
 import 'retailer_place_order_page.dart';
 import 'retailer_products_page.dart';
@@ -33,6 +34,7 @@ class _RetailerDashboardPageState extends State<RetailerDashboardPage> {
 
   RetailerModel? _retailer;
   RetailerProfileData? _profile;
+  RetailerDiscountModel? _discount;
   bool _isLoading = true;
 
   RetailerModel get _activeRetailer =>
@@ -62,27 +64,38 @@ class _RetailerDashboardPageState extends State<RetailerDashboardPage> {
       final retailer = await RetailerService.getSavedRetailer();
 
       RetailerProfileData? profile;
+      RetailerDiscountModel? discount;
 
-      final currentId = retailer?.visiterId ?? retailer?.retailerId;
-      if (currentId != null && currentId.isNotEmpty) {
-        final response =
-        await RetailerProfileService.getRetailerProfile(
-          currentId,
-        );
+      final currentId = (retailer?.visiterId ?? retailer?.retailerId ?? '').trim();
+      if (currentId.isNotEmpty) {
+        // Concurrently fetch profile and discount for optimal performance
+        final results = await Future.wait([
+          RetailerProfileService.getRetailerProfile(currentId)
+              .then((res) => res.data)
+              .catchError((e) {
+            debugPrint('⚠️ Error loading retailer profile: $e');
+            return null;
+          }),
+          ApiService.getDiscountByRetailer(currentId).catchError((e) {
+            debugPrint('⚠️ Error loading retailer discount: $e');
+            return null;
+          }),
+        ]);
 
-        if (response.data != null) {
-          profile = response.data;
-        }
+        profile = results[0] as RetailerProfileData?;
+        discount = results[1] as RetailerDiscountModel?;
       }
 
       if (mounted) {
         setState(() {
           _retailer = retailer;
           _profile = profile;
+          _discount = discount;
           _isLoading = false;
         });
       }
     } catch (e) {
+      debugPrint("❌ Error in _loadRetailer: $e");
       if (mounted) {
         setState(() => _isLoading = false);
       }
@@ -262,24 +275,64 @@ class _RetailerDashboardPageState extends State<RetailerDashboardPage> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 2,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.primaryGold.withValues(alpha: 0.25),
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      child: Text(
-                                        'AUTHORIZED ${purpose.toUpperCase()}',
-                                        style: GoogleFonts.poppins(
-                                          color: AppColors.primaryGold,
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.w700,
-                                          letterSpacing: 0.6,
+                                    Row(
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 2,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.primaryGold.withValues(alpha: 0.25),
+                                            borderRadius: BorderRadius.circular(6),
+                                          ),
+                                          child: Text(
+                                            'AUTHORIZED ${purpose.toUpperCase()}',
+                                            style: GoogleFonts.poppins(
+                                              color: AppColors.primaryGold,
+                                              fontSize: 10,
+                                              fontWeight: FontWeight.w700,
+                                              letterSpacing: 0.6,
+                                            ),
+                                          ),
                                         ),
-                                      ),
+                                        if (_discount?.hasDiscount == true) ...[
+                                          const SizedBox(width: 8),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                              vertical: 2,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: AppColors.primaryGold,
+                                              borderRadius: BorderRadius.circular(6),
+                                              boxShadow: [
+                                                BoxShadow(
+                                                  color: Colors.black.withValues(alpha: 0.15),
+                                                  blurRadius: 4,
+                                                  offset: const Offset(0, 1),
+                                                ),
+                                              ],
+                                            ),
+                                            child: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                const Icon(Icons.local_offer_rounded, size: 10, color: AppColors.primaryGreen),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  '${_discount!.formattedPercentage} OFF',
+                                                  style: GoogleFonts.poppins(
+                                                    color: AppColors.primaryGreen,
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.w800,
+                                                    letterSpacing: 0.5,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ],
+                                      ],
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
@@ -358,19 +411,14 @@ class _RetailerDashboardPageState extends State<RetailerDashboardPage> {
                                   runSpacing: 8,
                                   alignment: WrapAlignment.center,
                                   children: [
-                                    _buildInfoChip(
-                                      Icons.tag_rounded,
-                                      'Visiter ID: $visiterId',
-                                    ),
-                                    _buildInfoChip(
-                                      Icons.phone_rounded,
-                                      phone,
-                                    ),
-                                    if (currentRetailer.empType.isNotEmpty)
+
+                                    if (_discount?.hasDiscount == true)
                                       _buildInfoChip(
-                                        Icons.badge_outlined,
-                                        'Type: ${currentRetailer.empType}',
+                                        Icons.percent_rounded,
+                                        'Special Margin: ${_discount!.formattedPercentage} OFF',
                                       ),
+                                    if (currentRetailer.empType.isNotEmpty)
+
                                     if (currentRetailer.purpose.isNotEmpty)
                                       _buildInfoChip(
                                         Icons.category_outlined,
@@ -407,6 +455,7 @@ class _RetailerDashboardPageState extends State<RetailerDashboardPage> {
                         ],
                       ),
                     ),
+
 
                     const SizedBox(height: 16),
 
@@ -555,20 +604,17 @@ class _RetailerDashboardPageState extends State<RetailerDashboardPage> {
                           icon: Icons.shopping_cart_outlined,
                           title: 'Place Order',
                           subtitle: 'New Wholesale Order',
-                          onTap: () => _navigateTo(RetailerPlaceOrderPage(retailer: currentRetailer)),
-                        ),
-                        _AnimatedDashboardCard(
-                          icon: Icons.receipt_long_outlined,
-                          title: 'Orders History',
-                          subtitle: 'Order History & Status',
-                          onTap: () =>
-                              _navigateTo(MyOrdersPage(idType: 'Retailer', idValue: visiterId)),
-                        ),
-                        _AnimatedDashboardCard(
-                          icon: Icons.receipt_long_outlined,
-                          title: 'My Order',
-                          subtitle: 'Order History & Status',
                           onTap: () => _navigateTo(OrderPageFst(userId: visiterId)),
+                        ),
+                        _AnimatedDashboardCard(
+                          icon: Icons.receipt_long_outlined,
+                          title: 'My Orders',
+                          subtitle: 'Order History & Status',
+                          onTap: () => _navigateTo(RetailerOrderHistoryPage(
+                            visiterId: visiterId,
+                            userId: visiterId,
+                            retailer: currentRetailer,
+                          )),
                         ),
                         _AnimatedDashboardCard(
                           icon: Icons.account_balance_wallet_outlined,
@@ -592,7 +638,8 @@ class _RetailerDashboardPageState extends State<RetailerDashboardPage> {
                           icon: Icons.groups_rounded,
                           title: 'Our Team',
                           subtitle: 'Retailers, MRs & ASMs',
-                          onTap: () => _navigateTo(RetailerTeamScreen(retailer: currentRetailer)),
+                          onTap: () => _navigateTo(RetailerTeamScreen( employeeId: currentRetailer.visiterId ?? '',
+                            employeeType: 'Retailer',)),
                         ),
                         _AnimatedDashboardCard(
                           icon: Icons.inventory_2_outlined,

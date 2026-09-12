@@ -145,4 +145,4 @@ class RetailerModel {
       email: email ?? this.email,
     );
   }
-}
+}

@@ -779,6 +779,16 @@ class RetailerItem {
     return lower == 'active' || lower == 'true' || lower == '1';
   }
 
+  String get effectiveVisiterId => (visiterId != null && visiterId!.trim().isNotEmpty)
+      ? visiterId!.trim()
+      : (id != null ? id.toString() : '');
+
+  String get displayId => effectiveVisiterId.isNotEmpty ? effectiveVisiterId : '--';
+
+  String get displayMobile => (mobile != null && mobile!.trim().isNotEmpty)
+      ? mobile!.trim()
+      : ((empMobile != null && empMobile!.trim().isNotEmpty) ? empMobile!.trim() : 'N/A');
+
   String get displayLocation {
     final List<String> parts = [];
     if (block != null && block!.trim().isNotEmpty) parts.add(block!.trim());

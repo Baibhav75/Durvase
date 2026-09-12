@@ -13,6 +13,7 @@ import 'dealer_invoices_page.dart';
 import 'dealer_products_page.dart';
 import 'dealer_track_order_page.dart';
 import 'dealer_support_page.dart';
+import 'discount_apply_screen.dart';
 
 class DealerDrawer extends StatefulWidget {
   final DealerModel dealer;
@@ -441,6 +442,13 @@ class _DealerDrawerState extends State<DealerDrawer> {
               icon: Icons.inventory_2_outlined,
               title: 'Products',
               onTap: () => _goTo(DealerProductsPage(dealerId: widget.dealer.dealerId)),
+            ),
+
+            // Retailer Discounts
+            _drawerItem(
+              icon: Icons.discount_outlined,
+              title: 'Retailer Discounts',
+              onTap: () => _goTo(DiscountApplyScreen(dealerId: widget.dealer.dealerId)),
             ),
 
             // Support

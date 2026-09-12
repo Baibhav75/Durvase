@@ -8,6 +8,7 @@ import '../service/Retailer_service/retailer_session_manager.dart';
 import 'retailer_id_card_screen.dart';
 import 'retailer_invoices_page.dart';
 import 'retailer_orders_page.dart';
+import 'retailer_order_history_page.dart';
 import 'retailer_payments_page.dart';
 import 'retailer_place_order_page.dart';
 import 'retailer_products_page.dart';
@@ -366,7 +367,7 @@ class _RetailerDrawerState extends State<RetailerDrawer> {
             _drawerItem(
               icon: Icons.receipt_long_outlined,
               title: 'My Orders',
-              onTap: () => _goTo(RetailerOrdersPage(retailer: widget.retailer)),
+              onTap: () => _goTo(RetailerOrderHistoryPage(retailer: widget.retailer)),
             ),
 
             // Track Order
@@ -398,10 +399,16 @@ class _RetailerDrawerState extends State<RetailerDrawer> {
             ),
 
             // Our Team
+            // Our Team
             _drawerItem(
               icon: Icons.groups_rounded,
               title: 'Our Team',
-              onTap: () => _goTo(RetailerTeamScreen(retailer: widget.retailer)),
+              onTap: () => _goTo(
+                RetailerTeamScreen(
+                  employeeId: widget.retailer.visiterId,
+                  employeeType: 'Retailer',
+                ),
+              ),
             ),
 
             // Support

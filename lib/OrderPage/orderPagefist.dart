@@ -10,6 +10,7 @@ import '../model/banner_model.dart';
 import '../model/getcategory_model.dart';
 import '../model/latest_product_model.dart';
 import '../service/Auth_servcie.dart';
+import '../service/session_manager.dart';
 import 'card_screen.dart';
 import 'product_screen.dart';
 import 'widgets/banner_section.dart';
@@ -36,15 +37,19 @@ class _OrderPageFstState extends State<OrderPageFst> {
 
   int _cartItemCount = 0;
   int _currentNavIndex = 0;
+  String _effectiveUserId = '';
 
   @override
   void initState() {
     super.initState();
+    _effectiveUserId = widget.userId.trim();
     _loadData();
-    _fetchCartCount();
   }
 
   Future<void> _loadData() async {
+    if (_effectiveUserId.isEmpty) {
+      _effectiveUserId = await SessionManager.getEffectiveUserId();
+    }
     setState(() {
       _categoriesFuture = AuthService().getCategories();
       _bannerFuture = _bannerController.fetchBanners();
@@ -54,10 +59,13 @@ class _OrderPageFstState extends State<OrderPageFst> {
   }
 
   Future<void> _fetchCartCount() async {
-    if (widget.userId.isEmpty) return;
+    if (_effectiveUserId.isEmpty) {
+      _effectiveUserId = await SessionManager.getEffectiveUserId();
+    }
+    if (_effectiveUserId.isEmpty) return;
     try {
       final response = await http.get(
-        Uri.parse('https://durvasaayurved.com/api/GetCart/Cart?UserId=${widget.userId}'),
+        Uri.parse('https://durvasaayurved.com/api/GetCart/Cart?UserId=${Uri.encodeComponent(_effectiveUserId)}'),
       );
       if (response.statusCode == 200) {
         final jsonResponse = jsonDecode(response.body);
@@ -79,7 +87,7 @@ class _OrderPageFstState extends State<OrderPageFst> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => CartScreen(userId: widget.userId),
+        builder: (_) => CartScreen(userId: _effectiveUserId),
       ),
     ).then((_) => _fetchCartCount());
   }
@@ -94,7 +102,7 @@ class _OrderPageFstState extends State<OrderPageFst> {
             builder: (_) => ProductScreen(
               categoryId: firstCat.catId,
               categoryName: firstCat.categoryName,
-              userId: widget.userId,
+              userId: _effectiveUserId,
             ),
           ),
         );
@@ -104,6 +112,8 @@ class _OrderPageFstState extends State<OrderPageFst> {
 
   @override
   Widget build(BuildContext context) {
+    final activeId = _effectiveUserId.isNotEmpty ? _effectiveUserId : widget.userId;
+
     return Scaffold(
       backgroundColor: AppColors.creamBackground,
       body: SafeArea(
@@ -111,7 +121,7 @@ class _OrderPageFstState extends State<OrderPageFst> {
           children: [
             // 1. Top Glassy Location Pill & Glassy Cart Action Bar
             GlassyTopBar(
-              userId: widget.userId,
+              userId: activeId,
               cartCount: _cartItemCount,
               onCartTap: _openCart,
             ),
@@ -155,7 +165,7 @@ class _OrderPageFstState extends State<OrderPageFst> {
                     SliverToBoxAdapter(
                       child: CategorySection(
                         categoriesFuture: _categoriesFuture,
-                        userId: widget.userId,
+                        userId: activeId,
                         onViewAllTap: _openCategoriesPage,
                       ),
                     ),
@@ -164,7 +174,7 @@ class _OrderPageFstState extends State<OrderPageFst> {
                     SliverToBoxAdapter(
                       child: LatestProductsSection(
                         latestProductsFuture: _latestProductsFuture,
-                        userId: widget.userId,
+                        userId: activeId,
                         onCartUpdated: _fetchCartCount,
                       ),
                     ),

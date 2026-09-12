@@ -11,11 +11,13 @@ import '../service/Retailer_service/retailer_profile_service.dart';
 import '../service/api_service.dart';
 
 class RetailerTeamScreen extends StatefulWidget {
-  final RetailerModel retailer;
+  final String employeeId;
+  final String employeeType;
 
   const RetailerTeamScreen({
     super.key,
-    required this.retailer,
+    required this.employeeId,
+    required this.employeeType,
   });
 
   @override
@@ -111,7 +113,6 @@ class _RetailerTeamScreenState extends State<RetailerTeamScreen>
     _searchController.dispose();
     super.dispose();
   }
-
   Future<void> _loadAsm() async {
     setState(() {
       _isLoadingAsm = true;
@@ -120,6 +121,20 @@ class _RetailerTeamScreenState extends State<RetailerTeamScreen>
 
     try {
       final response = await RetailerProfileService.getAsmList();
+
+      debugPrint('========== ASM DATA ==========');
+
+      for (final asm in response.data) {
+        debugPrint('EmpId: ${asm.empId}');
+        debugPrint('Name: ${asm.name}');
+        debugPrint('State: ${asm.state}');
+        debugPrint('District: ${asm.district}');
+        debugPrint('Block: ${asm.block}');
+        debugPrint('Address: ${asm.address}');
+        debugPrint('Location: ${asm.displayLocation}');
+        debugPrint('==============================');
+      }
+
       if (!mounted) return;
 
       setState(() {
@@ -129,12 +144,14 @@ class _RetailerTeamScreenState extends State<RetailerTeamScreen>
       });
     } catch (e) {
       if (!mounted) return;
+
       setState(() {
         _asmError = e.toString().replaceAll('Exception: ', '');
         _isLoadingAsm = false;
       });
     }
   }
+
 
   Future<void> _loadRetailers() async {
     setState(() {
@@ -1338,81 +1355,125 @@ class _RetailerTeamScreenState extends State<RetailerTeamScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Location + Contact Actions Row
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      height: 48,
-                      width: 48,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: AppColors.primaryGreen.withValues(alpha: 0.08),
-                        border: Border.all(color: AppColors.primaryGold, width: 1.5),
-                      ),
-                      child: asm.resolvedImageUrl.isNotEmpty
-                          ? ClipOval(
-                              child: Image.network(
-                                asm.resolvedImageUrl,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => const Icon(
-                                  Icons.military_tech_rounded,
-                                  color: AppColors.primaryGreen,
-                                  size: 24,
-                                ),
-                              ),
-                            )
-                          : const Icon(
-                              Icons.military_tech_rounded,
-                              color: AppColors.primaryGreen,
-                              size: 24,
-                            ),
-                    ),
-                    const SizedBox(width: 12),
+                    // ================= LOCATION =================
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  asm.displayName,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 14.5,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.textDark,
+                          // State
+                          if (asm.state != null && asm.state!.trim().isNotEmpty)
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.map_outlined,
+                                  size: 14,
+                                  color: AppColors.primaryGreen,
+                                ),
+                                const SizedBox(width: 5),
+                                Expanded(
+                                  child: Text(
+                                    'State: ${asm.state!.trim()}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.textDark,
+                                    ),
                                   ),
                                 ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: (asm.isActive ? AppColors.leafGreen : AppColors.error).withValues(alpha: 0.1),
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  asm.status ?? (asm.isActive ? 'Active' : 'Inactive'),
-                                  style: GoogleFonts.poppins(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.w600,
-                                    color: asm.isActive ? AppColors.leafGreen : AppColors.error,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          Text(
-                            asm.employeeType ?? 'Area Sales Manager (ASM)',
-                            style: GoogleFonts.poppins(
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w500,
-                              color: AppColors.textSecondary,
+                              ],
                             ),
-                          ),
+
+                          // District
+                          if (asm.district != null && asm.district!.trim().isNotEmpty) ...[
+                            const SizedBox(height: 5),
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.location_city_outlined,
+                                  size: 14,
+                                  color: AppColors.primaryGold,
+                                ),
+                                const SizedBox(width: 5),
+                                Expanded(
+                                  child: Text(
+                                    'District: ${asm.district!.trim()}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.textDark,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+
+                          // Block
+                          if (asm.block != null && asm.block!.trim().isNotEmpty) ...[
+                            const SizedBox(height: 5),
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.grid_view_outlined,
+                                  size: 14,
+                                  color: AppColors.secondaryGreen,
+                                ),
+                                const SizedBox(width: 5),
+                                Expanded(
+                                  child: Text(
+                                    'Block: ${asm.block!.trim()}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: AppColors.textDark,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+
+                          // If all location fields are empty
+                          if ((asm.state == null || asm.state!.trim().isEmpty) &&
+                              (asm.district == null || asm.district!.trim().isEmpty) &&
+                              (asm.block == null || asm.block!.trim().isEmpty))
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.location_off_outlined,
+                                  size: 14,
+                                  color: AppColors.textSecondary,
+                                ),
+                                const SizedBox(width: 5),
+                                Text(
+                                  'Location not available',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 11,
+                                    color: AppColors.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
                         ],
                       ),
                     ),
+
+                    // ================= CONTACT BUTTONS =================
+                    if (asm.mobile != null)
+                      const SizedBox(),
+
+                    if (asm.email != null)
+                      const SizedBox(),
                   ],
                 ),
                 const SizedBox(height: 10),
@@ -1444,7 +1505,6 @@ class _RetailerTeamScreenState extends State<RetailerTeamScreen>
                     ],
                   ],
                 ),
-                const SizedBox(height: 6),
 
                 // Contact Actions Row
                 Row(

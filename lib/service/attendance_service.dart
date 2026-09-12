@@ -1,6 +1,5 @@
-// attendance_service.dart
 import 'dart:convert';
-import 'dart:async'; // This imports TimeoutException
+import 'dart:async';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart'; // Add this import
